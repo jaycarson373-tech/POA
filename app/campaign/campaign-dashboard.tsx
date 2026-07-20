@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient, type Session } from "@supabase/supabase-js";
+import { RAILWAY_API_URL } from "../public-config";
 
 type CampaignStatus = "draft" | "funding" | "upcoming" | "live" | "review" | "finalized" | "cancelled";
 
@@ -142,7 +143,7 @@ const EMPTY_DATA: DashboardData = {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
-const API_URL = (process.env.NEXT_PUBLIC_RAILWAY_API_URL || "").replace(/\/$/, "");
+const API_URL = RAILWAY_API_URL;
 const POA_TOKEN_DECIMALS = Number(process.env.NEXT_PUBLIC_POA_TOKEN_DECIMALS || "6");
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim()

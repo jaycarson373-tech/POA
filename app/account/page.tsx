@@ -7,10 +7,11 @@ import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { StandardConnect, type StandardConnectFeature } from "@wallet-standard/features";
 import { SolanaSignMessage, type SolanaSignMessageFeature } from "@solana/wallet-standard-features";
+import { RAILWAY_API_URL } from "../public-config";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
-const API_URL = (process.env.NEXT_PUBLIC_RAILWAY_API_URL || "").replace(/\/$/, "");
+const API_URL = RAILWAY_API_URL;
 
 type Identity = {
   xAccount: { username: string; followers_count: number; eligibility_status: string } | null;

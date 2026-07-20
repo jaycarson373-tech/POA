@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
+import { RAILWAY_API_URL } from "../public-config";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
-const API_URL = (process.env.NEXT_PUBLIC_RAILWAY_API_URL || "").replace(/\/$/, "");
+const API_URL = RAILWAY_API_URL;
 
 type Application = {
   id: string;
