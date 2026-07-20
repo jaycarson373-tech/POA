@@ -1,98 +1,91 @@
-# vinext-starter
+# POA — Proof of Attention
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+POA is an attention marketplace for Solana communities. Projects fund a timed
+campaign in SOL or an SPL token, creators submit original X posts, and the
+campaign rewards the posts that generate the most verified organic attention.
+Holding the campaign token adds a transparent, time-weighted score bonus.
 
-## Prerequisites
+## Current version
 
-- Node.js `>=22.13.0`
+The repository currently contains the complete interactive launch experience:
 
-## Quick Start
+- campaign discovery, filtering, and detail views
+- simulated X and Solana wallet connection
+- eligibility messaging for account age, followers, and wallet age
+- X post submission and attention-tracking flow
+- live leaderboard, attention score, and holder bonus presentation
+- token/SOL campaign creation and funding flow
+- finalist review and anti-bot policy messaging
+- responsive desktop and mobile layouts
+- custom Open Graph card for social sharing
+
+The production data integrations are the next phase. Until those are connected,
+accounts, campaigns, scores, and transactions use demonstration data.
+
+Live preview: [proof-of-attention.sufficientlev.chatgpt.site](https://proof-of-attention.sufficientlev.chatgpt.site)
+
+## Product flow
+
+1. A sponsor creates a campaign, chooses a duration, and funds the reward pool.
+2. A creator connects X and signs a message with a Solana wallet.
+3. POA verifies X account age/followers and the wallet's earliest activity.
+4. The creator publishes an original post and submits its X URL.
+5. Background workers snapshot organic X metrics and onchain token balances.
+6. POA ranks submissions by verified attention with a capped holder multiplier.
+7. The campaign closes and finalists enter a human anti-bot review queue.
+8. Approved winners receive the configured SOL or SPL-token payout.
+
+## Local development
+
+Requirements: Node.js `>=22.13.0`.
 
 ```bash
 npm install
 npm run dev
+```
+
+The development site runs at `http://localhost:3000`.
+
+```bash
+npm test
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+## Planned production services
 
-## Included Shape
+- **Supabase:** PostgreSQL source of truth, row-level security, campaigns,
+  identities, submissions, metric snapshots, reviews, and payouts.
+- **Railway:** API service and background workers for X polling, Solana
+  indexing, campaign finalization, scoring, and scheduled jobs.
+- **X API:** OAuth 2.0 connection, author verification, account eligibility,
+  post lookup, and organic/public metrics.
+- **Solana RPC/indexer:** wallet-age verification, SPL balances, holder-time
+  snapshots, funding confirmation, and payout transaction status.
+- **Secure signer:** multisig or managed signer for production payouts. Never
+  place a raw treasury private key in an ordinary environment variable.
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+Copy `.env.example` to `.env.local` when the production services are ready.
+Only public browser values may use the `NEXT_PUBLIC_` prefix.
 
-## Workspace Auth Headers
+## Application structure
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+- `app/page.tsx` — POA product interface and prototype interactions
+- `app/globals.css` — visual system and responsive layouts
+- `app/layout.tsx` — metadata and social preview configuration
+- `public/og.png` — POA social sharing card
+- `tests/rendered-html.test.mjs` — rendered-product checks
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+## Reward model
 
-Treat the full name as optional and fall back to email when it is absent:
+The intended V1 formula is deliberately explainable:
 
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```text
+attention score
+= verified organic impressions
+× engagement-quality multiplier
+× holder multiplier
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The holder multiplier is capped by each campaign. All leaderboard results are
+provisional until a human reviews the finalists for purchased engagement,
+coordinated bot activity, copied posts, and rule violations.
