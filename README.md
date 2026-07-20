@@ -67,6 +67,11 @@ npm run build
 Copy `.env.example` to `.env.local` when the production services are ready.
 Only public browser values may use the `NEXT_PUBLIC_` prefix.
 
+For the complete copy-paste infrastructure setup, see
+[`docs/GO_LIVE.md`](docs/GO_LIVE.md). The initial Supabase schema is committed
+at [`supabase/migrations/20260720160000_initial_poa.sql`](supabase/migrations/20260720160000_initial_poa.sql),
+with separate Vercel and Railway environment templates in [`deploy/`](deploy/).
+
 ## Application structure
 
 - `app/page.tsx` — POA product interface and prototype interactions
