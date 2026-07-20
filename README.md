@@ -7,22 +7,24 @@ Holding the campaign token adds a transparent, time-weighted score bonus.
 
 ## Current version
 
-The repository currently contains the complete interactive launch experience:
+The repository contains a real-data frontend with:
 
-- campaign discovery, filtering, and detail views
-- simulated X and Solana wallet connection
-- eligibility messaging for account age, followers, and wallet age
-- X post submission and attention-tracking flow
-- live leaderboard, attention score, and holder bonus presentation
-- token/SOL campaign creation and funding flow
-- finalist review and anti-bot policy messaging
-- responsive desktop and mobile layouts
-- custom Open Graph card for social sharing
+- Supabase-backed campaign discovery, protocol totals, rankings, and rewards
+- a separate per-campaign dashboard with verified X performance and activity
+- Wallet Standard connect, reconnect, copy-address, and disconnect controls
+- honest empty and unavailable states instead of demonstration records
+- POA-first campaign ordering when a real POA campaign row exists
+- campaign-review, refund, holder-position, market-snapshot, fee, and buyback
+  accounting schema
+- responsive desktop and mobile layouts and custom social metadata
 
-The production data integrations are the next phase. Until those are connected,
-accounts, campaigns, scores, and transactions use demonstration data.
+X sign-in, wallet ownership verification, campaign submission, background
+indexers, and transaction signing are not implemented yet. The dashboard keeps
+identity-scoped holdings, hold time, impressions, and rank locked until those
+services can return a verified user. Buybacks are not described as active until
+the public ledger contains a confirmed onchain transaction.
 
-Live preview: [proof-of-attention.sufficientlev.chatgpt.site](https://proof-of-attention.sufficientlev.chatgpt.site)
+Live site: [proofofattention.fun](https://www.proofofattention.fun/)
 
 ## Product flow
 
@@ -74,11 +76,14 @@ with separate Vercel and Railway environment templates in [`deploy/`](deploy/).
 
 ## Application structure
 
-- `app/page.tsx` — POA product interface and prototype interactions
+- `app/page.tsx` — POA protocol home and real public-data marketplace
+- `app/campaign/` — per-campaign control dashboard
 - `app/globals.css` — visual system and responsive layouts
 - `app/layout.tsx` — metadata and social preview configuration
 - `public/og.png` — POA social sharing card
 - `tests/rendered-html.test.mjs` — rendered-product checks
+- `supabase/migrations/20260720213000_campaign_control_plane.sql` — vetted
+  campaign, refund, holder-position, market, fee, and buyback control plane
 
 ## Reward model
 

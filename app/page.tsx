@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   animate,
   motion,
@@ -26,6 +27,7 @@ type CampaignRecord = {
   slug: string;
   name: string;
   ticker: string;
+  token_mint: string;
   reward_kind: "SOL" | "SPL";
   reward_amount_raw: string;
   reward_decimals: number;
@@ -283,7 +285,6 @@ export default function Home() {
   const [data, setData] = useState<ProtocolData>(EMPTY_DATA);
   const [syncState, setSyncState] = useState<SyncState>("loading");
   const [filter, setFilter] = useState<"all" | "live" | "upcoming" | "closed">("all");
-  const [selectedCampaign, setSelectedCampaign] = useState<CampaignRecord | null>(null);
   const [showLaunch, setShowLaunch] = useState(false);
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(0);
@@ -300,7 +301,7 @@ export default function Home() {
     try {
       const [campaigns, submissions, leaderboard, metrics, payouts, accounts] = await Promise.all([
         fetchAllRows<CampaignRecord>(
-          "campaigns?select=id,slug,name,ticker,reward_kind,reward_amount_raw,reward_decimals,status,starts_at,ends_at,created_at&status=in.(upcoming,live,review,finalized)&order=created_at.desc",
+          "campaigns?select=id,slug,name,ticker,token_mint,reward_kind,reward_amount_raw,reward_decimals,status,starts_at,ends_at,created_at&status=in.(upcoming,live,review,finalized)&order=created_at.desc",
         ),
         fetchAllRows<SubmissionRecord>(
           "submissions?select=id,campaign_id,user_id,status,submitted_at&status=in.(tracking,flagged,approved,winner)&order=submitted_at.desc",
@@ -407,7 +408,6 @@ export default function Home() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setSelectedCampaign(null);
         setShowLaunch(false);
         setShowWalletPicker(false);
       }
@@ -469,10 +469,19 @@ export default function Home() {
   }, [data, latestMetricBySubmission]);
 
   const visibleCampaigns = useMemo(() => {
-    if (filter === "all") return data.campaigns;
-    if (filter === "live") return data.campaigns.filter((campaign) => campaign.status === "live");
-    if (filter === "upcoming") return data.campaigns.filter((campaign) => campaign.status === "upcoming");
-    return data.campaigns.filter((campaign) => campaign.status === "review" || campaign.status === "finalized");
+    const filtered = filter === "all"
+      ? data.campaigns
+      : filter === "live"
+        ? data.campaigns.filter((campaign) => campaign.status === "live")
+        : filter === "upcoming"
+          ? data.campaigns.filter((campaign) => campaign.status === "upcoming")
+          : data.campaigns.filter((campaign) => campaign.status === "review" || campaign.status === "finalized");
+
+    return [...filtered].sort((left, right) => {
+      const leftIsPoa = left.token_mint === CONTRACT_ADDRESS || left.ticker.toUpperCase() === "POA";
+      const rightIsPoa = right.token_mint === CONTRACT_ADDRESS || right.ticker.toUpperCase() === "POA";
+      return Number(rightIsPoa) - Number(leftIsPoa);
+    });
   }, [data.campaigns, filter]);
 
   const showValue = (value: number) => (syncState === "ready" ? formatCompact(value) : "—");
@@ -737,7 +746,9 @@ export default function Home() {
                 <span className="display-value countdown">{formatCountdown(campaign.ends_at, now)}</span>
                 <span className="display-value campaign-participation">{formatCompact(campaignActivity.entries.get(campaign.id) ?? 0)}</span>
                 <span className="display-value campaign-attention">{formatCompact(campaignActivity.attention.get(campaign.id) ?? 0)}</span>
-                <button className="row-action" onClick={() => setSelectedCampaign(campaign)}>View Campaign</button>
+                <Link className="row-action" href={`campaign/?slug=${encodeURIComponent(campaign.slug)}`}>
+                  View Campaign
+                </Link>
               </motion.article>
             ))}
           </div>
@@ -869,38 +880,23 @@ export default function Home() {
         </div>
       )}
 
-      {(selectedCampaign || showLaunch) && (
-        <div className="modal-layer" role="dialog" aria-modal="true" aria-label={selectedCampaign ? selectedCampaign.name : "Launch campaign"}>
-          <button className="modal-backdrop" onClick={() => { setSelectedCampaign(null); setShowLaunch(false); }} aria-label="Close dialog" />
+      {showLaunch && (
+        <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Launch campaign">
+          <button className="modal-backdrop" onClick={() => setShowLaunch(false)} aria-label="Close dialog" />
           <div className="protocol-modal">
-            <button className="modal-close" onClick={() => { setSelectedCampaign(null); setShowLaunch(false); }} aria-label="Close dialog">×</button>
-            {selectedCampaign ? (
-              <>
-                <span className="section-label">CAMPAIGN / {selectedCampaign.status.toUpperCase()}</span>
-                <div className="modal-title-row"><span className="campaign-token">{selectedCampaign.ticker.slice(0, 2)}</span><div><h2>{selectedCampaign.name}</h2><p>${selectedCampaign.ticker}</p></div></div>
-                <dl className="modal-data">
-                  <div><dt>Reward pool</dt><dd>{rewardLabel(selectedCampaign)}</dd></div>
-                  <div><dt>Time remaining</dt><dd className="countdown">{formatCountdown(selectedCampaign.ends_at, now)}</dd></div>
-                  <div><dt>Entries</dt><dd>{formatCompact(campaignActivity.entries.get(selectedCampaign.id) ?? 0)}</dd></div>
-                  <div><dt>Verified attention</dt><dd>{formatCompact(campaignActivity.attention.get(selectedCampaign.id) ?? 0)}</dd></div>
-                </dl>
-                <button className="button-primary button-wide" onClick={requestXConnection}>Connect to Enter</button>
-              </>
-            ) : (
-              <>
-                <span className="section-label">PROJECT ACCESS</span>
-                <h2>Launch a campaign</h2>
-                <p className="modal-copy">Connect an eligible X account and Solana wallet to continue. Campaigns must be funded before they can enter the marketplace.</p>
-                <div className="modal-actions">
-                  <button className="button-secondary" onClick={requestXConnection}>Connect X</button>
-                  {connected && walletAddress ? (
-                    <button className="button-primary" onClick={() => void disconnectWallet()}>Disconnect Wallet</button>
-                  ) : (
-                    <button className="button-primary" onClick={connectWallet}>Connect Wallet</button>
-                  )}
-                </div>
-              </>
-            )}
+            <button className="modal-close" onClick={() => setShowLaunch(false)} aria-label="Close dialog">×</button>
+            <span className="section-label">VETTED PROJECT ACCESS</span>
+            <h2>Launch a campaign</h2>
+            <p className="modal-copy">Connect an eligible X account and Solana wallet to apply. Every campaign is reviewed by the POA team before it can go live. Approved projects proceed to funding; eligible rejected funding can be returned through the verified refund process.</p>
+            <div className="review-note"><i /> TEAM REVIEW REQUIRED / NO AUTOMATIC LISTINGS</div>
+            <div className="modal-actions">
+              <button className="button-secondary" onClick={requestXConnection}>Connect X</button>
+              {connected && walletAddress ? (
+                <button className="button-primary" onClick={() => void disconnectWallet()}>Disconnect Wallet</button>
+              ) : (
+                <button className="button-primary" onClick={connectWallet}>Connect Wallet</button>
+              )}
+            </div>
           </div>
         </div>
       )}

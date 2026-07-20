@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
@@ -31,12 +31,24 @@ test("server-renders the POA product", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
+test("server-renders the real-data campaign dashboard", async () => {
+  const response = await render("/campaign?slug=poa");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /Campaign Dashboard — Proof of Attention/);
+  assert.match(html, /SYNCHRONIZING CAMPAIGN DATA/);
+  assert.doesNotMatch(html, /BONK Attention Sprint|@solmason|250M|12\.8M|\$184K/);
+});
+
 test("ships the complete launch surface without starter artifacts", async () => {
-  const [page, layout, css, packageJson] = await Promise.all([
+  const [page, dashboard, layout, css, packageJson, controlPlane] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/campaign/campaign-dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260720213000_campaign_control_plane.sql", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /Connect X/);
@@ -54,6 +66,17 @@ test("ships the complete launch surface without starter artifacts", async () => 
   assert.match(page, /framer-motion/);
   assert.match(page, /attention-atmosphere/);
   assert.match(page, /table-row--rank-/);
+  assert.match(dashboard, /Your campaign stats/);
+  assert.match(dashboard, /TOTAL.*AIRDROPPED/);
+  assert.match(dashboard, /24H TOKEN VOLUME/);
+  assert.match(dashboard, /HOLD TIME/);
+  assert.match(dashboard, /YOUR RANK/);
+  assert.match(dashboard, /Market feed not connected/);
+  assert.match(controlPlane, /review_status/);
+  assert.match(controlPlane, /campaign_holder_positions/);
+  assert.match(controlPlane, /campaign_market_snapshots/);
+  assert.match(controlPlane, /buyback_epochs/);
+  assert.match(controlPlane, /campaign_refunds/);
   assert.match(layout, /\/poa-wordmark\.jpg/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /--shadow-panel/);
