@@ -94,7 +94,7 @@ main {
 }
 
 .brand-image {
-  background-position: center 52%;
+  background-position: center 48%;
   background-repeat: no-repeat;
   background-size: min(760px, 112vw) auto;
   display: block;
@@ -104,8 +104,9 @@ main {
 }
 
 .brand-image--compact {
+  background-position: center 48%;
   background-size: 146px auto;
-  height: 30px;
+  height: 44px;
   width: 146px;
 }
 
@@ -357,11 +358,12 @@ main {
 }
 
 .hero-primary > .brand-image {
-  background-size: min(820px, 100%) auto;
-  height: 205px;
-  margin: -52px 0 -31px -82px;
+  background-position: center 48%;
+  background-size: 100% auto;
+  height: 230px;
+  margin: -64px 0 -44px;
   max-width: none;
-  width: calc(100% + 82px);
+  width: 100%;
   filter: drop-shadow(0 16px 34px rgba(36, 92, 255, 0.08));
 }
 
@@ -2648,8 +2650,9 @@ footer small {
   }
 
   .hero-primary > .brand-image {
-    margin-left: -50px;
-    width: calc(100% + 50px);
+    height: 220px;
+    margin: -58px 0 -38px;
+    width: 100%;
   }
 
   .live-module {
@@ -2717,8 +2720,10 @@ footer small {
   }
 
   .brand-image--compact {
-    background-size: 88px auto;
-    width: 88px;
+    background-position: center 48%;
+    background-size: 104px auto;
+    height: 32px;
+    width: 104px;
   }
 
   .connection-actions {
@@ -2770,12 +2775,12 @@ footer small {
   }
 
   .hero-primary > .brand-image {
-    background-position: center 49%;
-    background-size: 100vw auto;
-    height: 158px;
-    margin: -40px 0 -23px -24px;
+    background-position: center 47%;
+    background-size: 100% auto;
+    height: 172px;
+    margin: -42px 0 -29px;
     max-width: none;
-    width: calc(100% + 48px);
+    width: 100%;
   }
 
   .hero-primary h2 {
