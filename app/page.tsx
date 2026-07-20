@@ -1,6 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+} from "framer-motion";
 import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import {
@@ -97,6 +104,13 @@ const CONTRACT_ADDRESS =
   "8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump";
 const X_ACCOUNT_URL = "https://x.com/POA_solana";
 const PAGE_SIZE = 1000;
+const REVEAL_MOTION = {
+  initial: { opacity: 0, y: 14 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount: 0.08 },
+  transition: { duration: 0.38, ease: "easeOut" },
+} as const;
+const ATTENTION_ICONS = ["◉", "♥", "↻", "□", "◎", "↗", "◌"];
 
 type ConnectFeature = StandardConnectFeature[typeof StandardConnect];
 type DisconnectFeature = StandardDisconnectFeature[typeof StandardDisconnect];
@@ -219,6 +233,44 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
       style={{ backgroundImage: 'url("poa-wordmark.jpg")' }}
     />
   );
+}
+
+function AnimatedMetric({
+  value,
+  ready,
+  className,
+}: {
+  value: number;
+  ready: boolean;
+  className?: string;
+}) {
+  const reducedMotion = useReducedMotion();
+  const motionValue = useMotionValue(0);
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useMotionValueEvent(motionValue, "change", (latest) => {
+    setDisplayValue(Math.round(latest));
+  });
+
+  useEffect(() => {
+    if (!ready) {
+      motionValue.set(0);
+      return;
+    }
+
+    if (reducedMotion) {
+      motionValue.set(value);
+      return;
+    }
+
+    const playback = animate(motionValue, value, {
+      duration: 0.62,
+      ease: [0.22, 1, 0.36, 1],
+    });
+    return () => playback.stop();
+  }, [motionValue, ready, reducedMotion, value]);
+
+  return <strong className={className}>{ready ? formatCompact(displayValue) : "—"}</strong>;
 }
 
 export default function Home() {
@@ -556,8 +608,29 @@ export default function Home() {
         <span className="status-rail-end">PROOF OVER NOISE</span>
       </div>
 
-      <section className="protocol-hero" id="top">
-        <div className="hero-primary">
+      <motion.section className="protocol-hero" id="top" {...REVEAL_MOTION}>
+        <div className="attention-atmosphere" aria-hidden="true">
+          {ATTENTION_ICONS.map((icon, index) => (
+            <motion.span
+              key={`${icon}-${index}`}
+              animate={{ y: [0, -8, 0], opacity: [0.035, 0.075, 0.035] }}
+              transition={{
+                duration: 5.5 + index * 0.65,
+                delay: index * 0.32,
+                ease: "easeInOut",
+                repeat: Infinity,
+              }}
+            >
+              {icon}
+            </motion.span>
+          ))}
+        </div>
+        <motion.div
+          className="hero-primary"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.42, ease: "easeOut", delay: 0.05 }}
+        >
           <BrandMark />
           <span className="section-label">PROOF OF ATTENTION / 001</span>
           <h1>Proof of Attention</h1>
@@ -571,9 +644,16 @@ export default function Home() {
             <button className="button-primary" onClick={() => setShowLaunch(true)}>Launch Campaign</button>
             <a className="button-secondary" href="#campaigns">Browse Campaigns</a>
           </div>
-        </div>
+        </motion.div>
 
-        <aside className="live-module" aria-label="Live protocol data">
+        <motion.aside
+          className="live-module"
+          aria-label="Live protocol data"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.42, ease: "easeOut", delay: 0.1 }}
+          whileHover={{ y: -2 }}
+        >
           <div className="module-heading">
             <span><i className={syncState === "ready" ? "status-live" : ""} /> LIVE STATUS</span>
             <button onClick={() => void loadProtocolData()} disabled={syncState === "loading"}>REFRESH</button>
@@ -592,17 +672,17 @@ export default function Home() {
             <span>SOURCE / SUPABASE</span>
             <span>NO MOCK DATA</span>
           </div>
-        </aside>
-      </section>
+        </motion.aside>
+      </motion.section>
 
-      <section className="protocol-stats" aria-label="Live protocol statistics">
-        <article><span>01 / ACTIVE CAMPAIGNS</span><strong>{showValue(protocolStats.activeCampaigns)}</strong></article>
-        <article><span>02 / VERIFIED ATTENTION</span><strong>{showValue(protocolStats.totalAttention)}</strong></article>
-        <article><span>03 / RANKED CREATORS</span><strong>{showValue(protocolStats.creators)}</strong></article>
-        <article><span>04 / CONFIRMED REWARDS</span><strong>{showValue(protocolStats.rewards)}</strong></article>
-      </section>
+      <motion.section className="protocol-stats" aria-label="Live protocol statistics" {...REVEAL_MOTION}>
+        <article><span>01 / ACTIVE CAMPAIGNS</span><AnimatedMetric value={protocolStats.activeCampaigns} ready={syncState === "ready"} /></article>
+        <article className="stat-primary"><span>02 / VERIFIED ATTENTION</span><AnimatedMetric value={protocolStats.totalAttention} ready={syncState === "ready"} /></article>
+        <article><span>03 / RANKED CREATORS</span><AnimatedMetric value={protocolStats.creators} ready={syncState === "ready"} /></article>
+        <article><span>04 / CONFIRMED REWARDS</span><AnimatedMetric value={protocolStats.rewards} ready={syncState === "ready"} /></article>
+      </motion.section>
 
-      <section className="how-panel" id="how-it-works">
+      <motion.section className="how-panel" id="how-it-works" {...REVEAL_MOTION}>
         <div className="section-head compact-head">
           <div><span className="section-label">PROTOCOL FLOW</span><h2>How it works</h2></div>
         </div>
@@ -616,9 +696,9 @@ export default function Home() {
             <article key={number}><span>{number}</span><p>{copy}</p></article>
           ))}
         </div>
-      </section>
+      </motion.section>
 
-      <section className="marketplace product-section" id="campaigns">
+      <motion.section className="marketplace product-section" id="campaigns" {...REVEAL_MOTION}>
         <div className="section-head">
           <div><span className="section-label">MARKETPLACE / LIVE PROTOCOL DATA</span><h2>Campaigns</h2></div>
           <button className="button-primary" onClick={() => setShowLaunch(true)}>Launch Campaign</button>
@@ -642,24 +722,29 @@ export default function Home() {
               <span>CAMPAIGN</span><span>REWARD POOL</span><span>STATUS</span><span>TIME</span><span>ENTRIES</span><span>ATTENTION</span><span />
             </div>
             {visibleCampaigns.map((campaign) => (
-              <article className="campaign-row" key={campaign.id}>
+              <motion.article
+                className="campaign-row"
+                key={campaign.id}
+                whileHover={{ y: -1 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+              >
                 <div className="campaign-identity">
                   <span className="campaign-token">{campaign.ticker.slice(0, 2)}</span>
                   <div><strong>{campaign.name}</strong><small>${campaign.ticker}</small></div>
                 </div>
-                <b>{rewardLabel(campaign)}</b>
+                <b className="campaign-reward">{rewardLabel(campaign)}</b>
                 <span className={`status-tag status-tag--${campaign.status}`}><i /> {campaign.status}</span>
                 <span className="display-value countdown">{formatCountdown(campaign.ends_at, now)}</span>
-                <span className="display-value">{formatCompact(campaignActivity.entries.get(campaign.id) ?? 0)}</span>
-                <span className="display-value">{formatCompact(campaignActivity.attention.get(campaign.id) ?? 0)}</span>
+                <span className="display-value campaign-participation">{formatCompact(campaignActivity.entries.get(campaign.id) ?? 0)}</span>
+                <span className="display-value campaign-attention">{formatCompact(campaignActivity.attention.get(campaign.id) ?? 0)}</span>
                 <button className="row-action" onClick={() => setSelectedCampaign(campaign)}>View Campaign</button>
-              </article>
+              </motion.article>
             ))}
           </div>
         )}
-      </section>
+      </motion.section>
 
-      <section className="product-section table-section" id="leaderboard">
+      <motion.section className="product-section table-section" id="leaderboard" {...REVEAL_MOTION}>
         <div className="section-head">
           <div><span className="section-label">VERIFIED RANKINGS</span><h2>Leaderboard</h2></div>
           <span className="section-meta">ATTENTION SCORE / HOLDER PROOF</span>
@@ -678,20 +763,32 @@ export default function Home() {
               const metric = latestMetricBySubmission.get(row.submission_id);
               const payout = payoutBySubmission.get(row.submission_id);
               return (
-                <div className="table-row" role="row" key={row.submission_id}>
-                  <div className="creator-cell"><b>#{row.rank.toString().padStart(2, "0")}</b><span>{row.x_display_name || `@${row.x_username}`}<small>@{row.x_username}</small></span></div>
-                  <strong className="display-value">{formatCompact(Number(row.attention_score || 0))}</strong>
+                <motion.div
+                  className={`table-row${row.rank >= 1 && row.rank <= 3 ? ` table-row--rank-${row.rank}` : ""}`}
+                  role="row"
+                  key={row.submission_id}
+                  whileHover={{ x: 2 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                >
+                  <div className="creator-cell">
+                    <b>#{row.rank.toString().padStart(2, "0")}</b>
+                    <span className="creator-name">
+                      <span className="creator-display">{row.x_display_name || `@${row.x_username}`}<i className="platform-badge" aria-hidden="true">X</i></span>
+                      <small>@{row.x_username}</small>
+                    </span>
+                  </div>
+                  <AnimatedMetric className="display-value attention-score" value={Number(row.attention_score || 0)} ready />
                   <span>{campaign?.name ?? "—"}</span>
                   <span className="display-value">{metric ? formatCompact(metric.impression_count) : "—"}</span>
                   <span>{payout ? payoutLabel(payout, campaign) : "—"}</span>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         )}
-      </section>
+      </motion.section>
 
-      <section className="product-section table-section" id="rewards">
+      <motion.section className="product-section table-section" id="rewards" {...REVEAL_MOTION}>
         <div className="section-head">
           <div><span className="section-label">ONCHAIN HISTORY</span><h2>Recent rewards</h2></div>
           <span className="section-meta">CONFIRMED PAYOUTS ONLY</span>
@@ -709,19 +806,19 @@ export default function Home() {
               const campaign = campaignById.get(payout.campaign_id);
               const account = accountByUser.get(payout.user_id);
               return (
-                <div className="table-row" role="row" key={payout.id}>
+                <motion.div className="table-row activity-row" role="row" key={payout.id} whileHover={{ x: 2 }} transition={{ duration: 0.16, ease: "easeOut" }}>
                   <strong>{account ? `@${account.username}` : "—"}</strong>
                   <span>{campaign?.name ?? "—"}</span>
                   <span className="reward-value">{payoutLabel(payout, campaign)}</span>
                   <time dateTime={payout.confirmed_at}>{formatDate(payout.confirmed_at)}</time>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         )}
-      </section>
+      </motion.section>
 
-      <section className="faq-section product-section" id="faq">
+      <motion.section className="faq-section product-section" id="faq" {...REVEAL_MOTION}>
         <div className="section-head">
           <div><span className="section-label">PROTOCOL REFERENCE</span><h2>FAQ</h2></div>
         </div>
@@ -731,7 +828,7 @@ export default function Home() {
           <details><summary>How are campaigns funded?<span>+</span></summary><p>Projects define the duration and reward asset, then fund the campaign before it moves into the live marketplace.</p></details>
           <details><summary>When are rewards distributed?<span>+</span></summary><p>Winning submissions pass the configured review process before confirmed payouts appear in the public reward history.</p></details>
         </div>
-      </section>
+      </motion.section>
 
       <footer>
         <BrandMark compact />
