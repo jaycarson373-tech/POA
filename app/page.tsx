@@ -1,562 +1,603 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Campaign = {
-  id: number;
+type CampaignStatus = "draft" | "funding" | "upcoming" | "live" | "review" | "finalized" | "cancelled";
+
+type CampaignRecord = {
+  id: string;
+  slug: string;
   name: string;
   ticker: string;
-  glyph: string;
-  color: string;
-  soft: string;
-  prize: string;
-  prizeTicker: string;
-  ends: string;
-  duration: string;
-  submissions: number;
-  participants: number;
-  topScore: string;
-  holderBonus: string;
-  description: string;
-  status: "Live" | "Upcoming";
-  tag: string;
+  reward_kind: "SOL" | "SPL";
+  reward_amount_raw: string;
+  reward_decimals: number;
+  status: CampaignStatus;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
 };
 
-const campaigns: Campaign[] = [
-  {
-    id: 1,
-    name: "BONK Attention Sprint",
-    ticker: "BONK",
-    glyph: "B",
-    color: "#f8fbff",
-    soft: "#164ee8",
-    prize: "250M",
-    prizeTicker: "$BONK",
-    ends: "18:42:09",
-    duration: "48 hours",
-    submissions: 186,
-    participants: 142,
-    topScore: "91.8K",
-    holderBonus: "+20%",
-    description:
-      "Create an original post about BONK, its community, or something only the BONK timeline would understand.",
-    status: "Live",
-    tag: "Community",
-  },
-  {
-    id: 2,
-    name: "Jupiter Everywhere",
-    ticker: "JUP",
-    glyph: "J",
-    color: "#8fc2ff",
-    soft: "#071d5c",
-    prize: "75K",
-    prizeTicker: "$JUP",
-    ends: "31:06:44",
-    duration: "72 hours",
-    submissions: 91,
-    participants: 74,
-    topScore: "68.2K",
-    holderBonus: "+15%",
-    description:
-      "Show the timeline how Jupiter makes Solana feel connected. Memes, product takes, and original threads all count.",
-    status: "Live",
-    tag: "Product",
-  },
-  {
-    id: 3,
-    name: "SOL Summer Signal",
-    ticker: "SOL",
-    glyph: "S",
-    color: "#ffffff",
-    soft: "#285fff",
-    prize: "120",
-    prizeTicker: "SOL",
-    ends: "06:21:18",
-    duration: "24 hours",
-    submissions: 248,
-    participants: 201,
-    topScore: "142K",
-    holderBonus: "+10%",
-    description:
-      "Make one post that captures why the next wave of internet culture is happening on Solana.",
-    status: "Live",
-    tag: "Ecosystem",
-  },
-  {
-    id: 4,
-    name: "WIF Meme Marathon",
-    ticker: "WIF",
-    glyph: "W",
-    color: "#a8ccff",
-    soft: "#0c286f",
-    prize: "500K",
-    prizeTicker: "$WIF",
-    ends: "Starts tomorrow",
-    duration: "48 hours",
-    submissions: 0,
-    participants: 318,
-    topScore: "—",
-    holderBonus: "+25%",
-    description:
-      "The hat stays on. Bring your sharpest original WIF post and compete for a share of the pool.",
-    status: "Upcoming",
-    tag: "Memes",
-  },
-];
+type SubmissionRecord = {
+  id: string;
+  campaign_id: string;
+  user_id: string;
+  status: "tracking" | "flagged" | "approved" | "disqualified" | "winner";
+  submitted_at: string;
+};
 
-const leaders = [
-  { rank: 1, handle: "@solmason", avatar: "SM", score: "91,842", views: "487K", bonus: "+20%", prize: "62.5M" },
-  { rank: 2, handle: "@ponzibonk", avatar: "PB", score: "74,390", views: "392K", bonus: "+20%", prize: "40M" },
-  { rank: 3, handle: "@jpegsandsol", avatar: "JS", score: "69,104", views: "355K", bonus: "+12%", prize: "30M" },
-  { rank: 4, handle: "@meowterminal", avatar: "MT", score: "55,882", views: "301K", bonus: "+20%", prize: "22.5M" },
-  { rank: 5, handle: "@chainkay", avatar: "CK", score: "44,210", views: "228K", bonus: "—", prize: "17.5M" },
-];
+type LeaderboardRecord = {
+  campaign_id: string;
+  submission_id: string;
+  x_username: string;
+  x_display_name: string | null;
+  x_profile_image_url: string | null;
+  attention_score: string;
+  holder_multiplier: string;
+  rank: number;
+};
 
-const scoreParts = [
-  { label: "Qualified views", value: "61.4K", note: "Unique, quality-weighted impressions" },
-  { label: "Engagement", value: "18.7K", note: "Replies, reposts, likes, and bookmarks" },
-  { label: "Holder proof", value: "+20%", note: "Time-weighted onchain bonus" },
-];
+type MetricRecord = {
+  submission_id: string;
+  impression_count: number;
+  captured_at: string;
+};
 
-function TokenMark({ campaign, small = false }: { campaign: Campaign; small?: boolean }) {
+type PayoutRecord = {
+  id: string;
+  campaign_id: string;
+  submission_id: string;
+  user_id: string;
+  amount_raw: string;
+  asset_mint: string | null;
+  rank: number;
+  confirmed_at: string;
+};
+
+type XAccountRecord = {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+};
+
+type ProtocolData = {
+  campaigns: CampaignRecord[];
+  submissions: SubmissionRecord[];
+  leaderboard: LeaderboardRecord[];
+  metrics: MetricRecord[];
+  payouts: PayoutRecord[];
+  accounts: XAccountRecord[];
+};
+
+type SyncState = "loading" | "ready" | "unconfigured" | "error";
+
+const EMPTY_DATA: ProtocolData = {
+  campaigns: [],
+  submissions: [],
+  leaderboard: [],
+  metrics: [],
+  payouts: [],
+  accounts: [],
+};
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? "";
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim() ?? "";
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(resource: string): Promise<T[]> {
+  const rows: T[] = [];
+
+  for (let page = 0; page < 20; page += 1) {
+    const separator = resource.includes("?") ? "&" : "?";
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/${resource}${separator}limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Protocol data request failed with ${response.status}`);
+    }
+
+    const batch = (await response.json()) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+function formatTokenAmount(raw: string, decimals: number, maxFraction = 2) {
+  try {
+    const digits = BigInt(raw || "0").toString().padStart(decimals + 1, "0");
+    const whole = decimals > 0 ? digits.slice(0, -decimals) : digits;
+    const fraction = decimals > 0 ? digits.slice(-decimals).replace(/0+$/, "").slice(0, maxFraction) : "";
+    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return fraction ? `${grouped}.${fraction}` : grouped;
+  } catch {
+    return "—";
+  }
+}
+
+function formatCompact(value: number) {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatCountdown(endsAt: string | null, now: number) {
+  if (!endsAt || now === 0) return "—";
+  const remaining = new Date(endsAt).getTime() - now;
+  if (remaining <= 0) return "ENDED";
+
+  const totalSeconds = Math.floor(remaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}D ${hours.toString().padStart(2, "0")}H`;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function rewardLabel(campaign: CampaignRecord) {
+  const symbol = campaign.reward_kind === "SOL" ? "SOL" : `$${campaign.ticker}`;
+  return `${formatTokenAmount(campaign.reward_amount_raw, campaign.reward_decimals)} ${symbol}`;
+}
+
+function payoutLabel(payout: PayoutRecord, campaign?: CampaignRecord) {
+  if (!campaign) return formatTokenAmount(payout.amount_raw, 9);
+  const symbol = payout.asset_mint ? `$${campaign.ticker}` : "SOL";
+  return `${formatTokenAmount(payout.amount_raw, campaign.reward_decimals)} ${symbol}`;
+}
+
+function EmptyState({ code, title, body }: { code: string; title: string; body: string }) {
   return (
-    <span
-      className={`token-mark${small ? " token-mark--small" : ""}`}
-      style={{ background: campaign.soft, color: campaign.color }}
-      aria-hidden="true"
-    >
-      {campaign.glyph}
-    </span>
+    <div className="empty-state">
+      <span className="empty-code">[{code}]</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </div>
+    </div>
   );
 }
 
-function CloseButton({ onClick }: { onClick: () => void }) {
+function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <button className="close-button" onClick={onClick} aria-label="Close dialog">
-      ×
-    </button>
+    <span
+      className={compact ? "brand-image brand-image--compact" : "brand-image"}
+      role="img"
+      aria-label="Proof of Attention"
+      style={{ backgroundImage: 'url("poa-wordmark.jpg")' }}
+    />
   );
 }
 
 export default function Home() {
-  const [xConnected, setXConnected] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [activeFilter, setActiveFilter] = useState("All campaigns");
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [showSubmit, setShowSubmit] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [toast, setToast] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [data, setData] = useState<ProtocolData>(EMPTY_DATA);
+  const [syncState, setSyncState] = useState<SyncState>("loading");
+  const [filter, setFilter] = useState<"all" | "live" | "upcoming" | "closed">("all");
+  const [selectedCampaign, setSelectedCampaign] = useState<CampaignRecord | null>(null);
+  const [showLaunch, setShowLaunch] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [now, setNow] = useState(0);
 
-  const fullyConnected = xConnected && walletConnected;
-  const visibleCampaigns = useMemo(() => {
-    if (activeFilter === "All campaigns") return campaigns;
-    if (activeFilter === "Ending soon") return campaigns.filter((campaign) => campaign.id === 3 || campaign.id === 1);
-    if (activeFilter === "SOL rewards") return campaigns.filter((campaign) => campaign.prizeTicker === "SOL");
-    return campaigns.filter((campaign) => campaign.holderBonus !== "—");
-  }, [activeFilter]);
+  const loadProtocolData = useCallback(async () => {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      setData(EMPTY_DATA);
+      setSyncState("unconfigured");
+      return;
+    }
+
+    setSyncState("loading");
+
+    try {
+      const [campaigns, submissions, leaderboard, metrics, payouts, accounts] = await Promise.all([
+        fetchAllRows<CampaignRecord>(
+          "campaigns?select=id,slug,name,ticker,reward_kind,reward_amount_raw,reward_decimals,status,starts_at,ends_at,created_at&status=in.(upcoming,live,review,finalized)&order=created_at.desc",
+        ),
+        fetchAllRows<SubmissionRecord>(
+          "submissions?select=id,campaign_id,user_id,status,submitted_at&status=in.(tracking,flagged,approved,winner)&order=submitted_at.desc",
+        ),
+        fetchAllRows<LeaderboardRecord>(
+          "campaign_leaderboard?select=campaign_id,submission_id,x_username,x_display_name,x_profile_image_url,attention_score,holder_multiplier,rank&order=attention_score.desc",
+        ),
+        fetchAllRows<MetricRecord>(
+          "x_metric_snapshots?select=submission_id,impression_count,captured_at&fetch_status=eq.ok&order=captured_at.desc",
+        ),
+        fetchAllRows<PayoutRecord>(
+          "payouts?select=id,campaign_id,submission_id,user_id,amount_raw,asset_mint,rank,confirmed_at&status=eq.confirmed&order=confirmed_at.desc",
+        ),
+        fetchAllRows<XAccountRecord>("x_accounts?select=user_id,username,display_name"),
+      ]);
+
+      setData({ campaigns, submissions, leaderboard, metrics, payouts, accounts });
+      setSyncState("ready");
+    } catch {
+      setData(EMPTY_DATA);
+      setSyncState("error");
+    }
+  }, []);
 
   useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(""), 3200);
+    const timeout = window.setTimeout(() => void loadProtocolData(), 0);
     return () => window.clearTimeout(timeout);
-  }, [toast]);
+  }, [loadProtocolData]);
+
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now());
+    const timeout = window.setTimeout(updateNow, 0);
+    const interval = window.setInterval(updateNow, 1000);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setSelectedCampaign(null);
-        setShowSubmit(false);
-        setShowCreate(false);
-        setShowProfile(false);
+        setShowLaunch(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const connectX = () => {
-    setXConnected(true);
-    setToast("X account verified — 4 years old · 12.8K followers");
-  };
-
-  const connectWallet = () => {
-    setWalletConnected(true);
-    setToast("Wallet connected — active for 2 years");
-  };
-
-  const openSubmission = (campaign: Campaign) => {
-    setSelectedCampaign(campaign);
-    if (!fullyConnected) {
-      setToast("Connect X and your wallet before submitting");
-      return;
+  const latestMetricBySubmission = useMemo(() => {
+    const latest = new Map<string, MetricRecord>();
+    for (const metric of data.metrics) {
+      if (!latest.has(metric.submission_id)) latest.set(metric.submission_id, metric);
     }
-    setShowSubmit(true);
+    return latest;
+  }, [data.metrics]);
+
+  const campaignById = useMemo(
+    () => new Map(data.campaigns.map((campaign) => [campaign.id, campaign])),
+    [data.campaigns],
+  );
+
+  const accountByUser = useMemo(
+    () => new Map(data.accounts.map((account) => [account.user_id, account])),
+    [data.accounts],
+  );
+
+  const payoutBySubmission = useMemo(
+    () => new Map(data.payouts.map((payout) => [payout.submission_id, payout])),
+    [data.payouts],
+  );
+
+  const campaignActivity = useMemo(() => {
+    const entries = new Map<string, number>();
+    const attention = new Map<string, number>();
+
+    for (const submission of data.submissions) {
+      entries.set(submission.campaign_id, (entries.get(submission.campaign_id) ?? 0) + 1);
+      const metric = latestMetricBySubmission.get(submission.id);
+      if (metric) {
+        attention.set(submission.campaign_id, (attention.get(submission.campaign_id) ?? 0) + metric.impression_count);
+      }
+    }
+
+    return { entries, attention };
+  }, [data.submissions, latestMetricBySubmission]);
+
+  const protocolStats = useMemo(() => {
+    const totalAttention = Array.from(latestMetricBySubmission.values()).reduce(
+      (total, metric) => total + metric.impression_count,
+      0,
+    );
+    return {
+      activeCampaigns: data.campaigns.filter((campaign) => campaign.status === "live").length,
+      submissions: data.submissions.length,
+      creators: new Set(data.leaderboard.map((row) => row.x_username)).size,
+      totalAttention,
+      rewards: data.payouts.length,
+    };
+  }, [data, latestMetricBySubmission]);
+
+  const visibleCampaigns = useMemo(() => {
+    if (filter === "all") return data.campaigns;
+    if (filter === "live") return data.campaigns.filter((campaign) => campaign.status === "live");
+    if (filter === "upcoming") return data.campaigns.filter((campaign) => campaign.status === "upcoming");
+    return data.campaigns.filter((campaign) => campaign.status === "review" || campaign.status === "finalized");
+  }, [data.campaigns, filter]);
+
+  const showValue = (value: number) => (syncState === "ready" ? formatCompact(value) : "—");
+
+  const requestConnection = (label: "X" | "Wallet") => {
+    setNotice(`${label} connection is not available on this deployment yet.`);
   };
 
-  const handleSubmission = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitted(true);
-    setToast("Post submitted — attention tracking is now live");
-    window.setTimeout(() => setShowSubmit(false), 900);
+  const copyContract = async () => {
+    if (!CONTRACT_ADDRESS) return;
+    try {
+      await navigator.clipboard.writeText(CONTRACT_ADDRESS);
+      setNotice("Contract address copied.");
+    } catch {
+      setNotice("Could not copy the contract address.");
+    }
   };
 
-  const handleCreate = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setShowCreate(false);
-    setToast("Campaign draft created — funding is the final step");
-  };
+  const dataEmptyBody =
+    syncState === "unconfigured"
+      ? "Protocol data has not been connected on this deployment."
+      : syncState === "error"
+        ? "Protocol data could not be synchronized. Try again shortly."
+        : "No records have been indexed yet.";
 
   return (
     <main>
-      <header className="site-header">
-        <a className="brand" href="#top" aria-label="Proof of Attention home">
-          <img className="brand-logo" src="poa-logo.jpg" alt="" />
-          <span className="brand-name"><b>POA</b> proof of attention</span>
+      <header className="protocol-header">
+        <a className="protocol-brand" href="#top" aria-label="Proof of Attention home">
+          <BrandMark compact />
         </a>
-        <nav className="desktop-nav" aria-label="Primary navigation">
+        <nav aria-label="Primary navigation">
           <a href="#campaigns">Campaigns</a>
           <a href="#leaderboard">Leaderboard</a>
-          <a href="#how-it-works">How it works</a>
+          <a href="#rewards">Rewards</a>
+          <a href="#faq">FAQ</a>
         </nav>
-        <div className="header-actions">
-          <button className="text-button create-desktop" onClick={() => setShowCreate(true)}>
-            + Create campaign
-          </button>
-          {fullyConnected ? (
-            <button className="profile-pill" onClick={() => setShowProfile(true)}>
-              <span className="status-dot" /> @matthew <span className="wallet-mini">7x…POA</span>
-            </button>
-          ) : (
-            <button className="button button--dark button--compact" onClick={xConnected ? connectWallet : connectX}>
-              {xConnected ? "Connect wallet" : "Connect X + wallet"}
-            </button>
-          )}
+        <div className="connection-actions">
+          <button onClick={() => requestConnection("X")}>Connect X</button>
+          <button className="button-primary button-small" onClick={() => requestConnection("Wallet")}>Connect Wallet</button>
         </div>
       </header>
 
-      <section className="brand-banner" aria-label="POA — Proof of Attention">
-        <img src="poa-banner.jpg" alt="POA electric blue Proof of Attention banner" />
-        <span>PROOF OF ATTENTION · THE ATTENTION MARKET</span>
-      </section>
+      <div className="status-rail" aria-label="Protocol status">
+        <span><i className={syncState === "ready" ? "status-live" : ""} /> POA PROTOCOL</span>
+        <span>NETWORK / SOLANA</span>
+        <span>DATA / {syncState.toUpperCase()}</span>
+        <span className="status-rail-end">PROOF OVER NOISE</span>
+      </div>
 
-      <section className="hero" id="top">
-        <div className="hero-copy">
-          <div className="eyebrow"><span /> THE ATTENTION MARKET IS OPEN</div>
-          <h1>Attention is<br />the <em>economy.</em></h1>
-          <p className="hero-lede">
-            Turn posts into proof. Compete for token-funded rewards based on real reach, quality engagement, and what you hold onchain.
+      <section className="protocol-hero" id="top">
+        <div className="hero-primary">
+          <BrandMark />
+          <span className="section-label">PROOF OF ATTENTION / 001</span>
+          <h1>Proof of Attention</h1>
+          <h2>Turn attention into proof.</h2>
+          <p>
+            Projects fund campaigns.<br />
+            Creators generate attention.<br />
+            Rewards go to the people moving the timeline.
           </p>
           <div className="hero-actions">
-            <a className="button button--acid" href="#campaigns">Explore live campaigns <span>↗</span></a>
-            <button className="button button--ghost" onClick={() => setShowCreate(true)}>Launch a campaign</button>
+            <button className="button-primary" onClick={() => setShowLaunch(true)}>Launch Campaign</button>
+            <a className="button-secondary" href="#campaigns">Browse Campaigns</a>
           </div>
-          <div className="trust-row">
-            <span><b>01</b> Connect X</span>
-            <i>→</i>
-            <span><b>02</b> Connect wallet</span>
-            <i>→</i>
-            <span><b>03</b> Post &amp; earn</span>
-          </div>
+          {CONTRACT_ADDRESS && (
+            <button className="contract-address" onClick={copyContract} aria-label="Copy contract address">
+              <span>CONTRACT</span>
+              <b>{`${CONTRACT_ADDRESS.slice(0, 8)}…${CONTRACT_ADDRESS.slice(-8)}`}</b>
+              <i>COPY</i>
+            </button>
+          )}
         </div>
 
-        <div className="signal-card" aria-label="Live campaign example">
-          <div className="signal-grid" aria-hidden="true" />
-          <div className="signal-topline">
-            <span className="live-pill"><i /> LIVE SIGNAL</span>
-            <span className="mono">18:42:09 LEFT</span>
+        <aside className="live-module" aria-label="Live protocol data">
+          <div className="module-heading">
+            <span><i className={syncState === "ready" ? "status-live" : ""} /> LIVE STATUS</span>
+            <button onClick={() => void loadProtocolData()} disabled={syncState === "loading"}>REFRESH</button>
           </div>
-          <div className="signal-campaign">
-            <TokenMark campaign={campaigns[0]} />
-            <div>
-              <span className="micro-label">BONK ATTENTION SPRINT</span>
-              <strong>250M <small>$BONK</small></strong>
-            </div>
+          <div className="module-status">
+            <span>{syncState === "ready" ? "PROTOCOL INDEX ONLINE" : "AWAITING PROTOCOL DATA"}</span>
+            <b>{syncState === "ready" ? "SYNCED" : "—"}</b>
           </div>
-          <div className="signal-divider" />
-          <div className="signal-score-head">
-            <span>YOUR ATTENTION SCORE</span>
-            <span>PROJECTED RANK</span>
+          <dl>
+            <div><dt>Active campaigns</dt><dd>{showValue(protocolStats.activeCampaigns)}</dd></div>
+            <div><dt>Public submissions</dt><dd>{showValue(protocolStats.submissions)}</dd></div>
+            <div><dt>Verified attention</dt><dd>{showValue(protocolStats.totalAttention)}</dd></div>
+            <div><dt>Ranked creators</dt><dd>{showValue(protocolStats.creators)}</dd></div>
+          </dl>
+          <div className="module-foot">
+            <span>SOURCE / SUPABASE</span>
+            <span>NO MOCK DATA</span>
           </div>
-          <div className="signal-score">
-            <strong>72,488</strong>
-            <span>#2</span>
-          </div>
-          <div className="sparkline" aria-label="Attention score trending upward">
-            {[18, 24, 20, 34, 29, 42, 39, 55, 48, 61, 73, 67, 82, 78, 92].map((height, index) => (
-              <i key={index} style={{ height: `${height}%` }} />
-            ))}
-          </div>
-          <div className="signal-footer">
-            <span><i>↗</i> 487K verified views</span>
-            <span className="bonus-chip">+20% HOLDER BOOST</span>
-          </div>
+        </aside>
+      </section>
+
+      <section className="protocol-stats" aria-label="Live protocol statistics">
+        <article><span>01 / ACTIVE CAMPAIGNS</span><strong>{showValue(protocolStats.activeCampaigns)}</strong></article>
+        <article><span>02 / VERIFIED ATTENTION</span><strong>{showValue(protocolStats.totalAttention)}</strong></article>
+        <article><span>03 / RANKED CREATORS</span><strong>{showValue(protocolStats.creators)}</strong></article>
+        <article><span>04 / CONFIRMED REWARDS</span><strong>{showValue(protocolStats.rewards)}</strong></article>
+      </section>
+
+      <section className="how-panel" id="how-it-works">
+        <div className="section-head compact-head">
+          <div><span className="section-label">PROTOCOL FLOW</span><h2>How it works</h2></div>
+        </div>
+        <div className="how-grid">
+          {[
+            ["01", "Projects launch campaigns."],
+            ["02", "Creators submit content."],
+            ["03", "POA measures verified performance."],
+            ["04", "Rewards are distributed."],
+          ].map(([number, copy]) => (
+            <article key={number}><span>{number}</span><p>{copy}</p></article>
+          ))}
         </div>
       </section>
 
-      <section className="market-strip" aria-label="Platform activity">
-        <div><strong>$184K</strong><span>LIVE REWARDS</span></div>
-        <div><strong>12.8M</strong><span>VERIFIED VIEWS</span></div>
-        <div><strong>1,240</strong><span>CREATORS EARNING</span></div>
-        <div><strong>24</strong><span>ACTIVE CAMPAIGNS</span></div>
-        <p>Proof, not promises. <span>Onchain rewards for real attention.</span></p>
-      </section>
-
-      <section className="campaign-section" id="campaigns">
-        <div className="section-heading">
-          <div>
-            <span className="section-kicker">LIVE OPPORTUNITIES</span>
-            <h2>Compete for attention.</h2>
-          </div>
-          <p>Pick a campaign. Make something worth noticing. The timeline decides the rest.</p>
+      <section className="marketplace product-section" id="campaigns">
+        <div className="section-head">
+          <div><span className="section-label">MARKETPLACE / LIVE PROTOCOL DATA</span><h2>Campaigns</h2></div>
+          <button className="button-primary" onClick={() => setShowLaunch(true)}>Launch Campaign</button>
         </div>
-        <div className="filter-row" role="group" aria-label="Filter campaigns">
-          {["All campaigns", "Ending soon", "SOL rewards", "Holder boost"].map((filter) => (
-            <button
-              className={activeFilter === filter ? "active" : ""}
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-            >
-              {filter}
+        <div className="filter-bar" role="group" aria-label="Campaign filters">
+          {(["all", "live", "upcoming", "closed"] as const).map((item) => (
+            <button className={filter === item ? "active" : ""} key={item} onClick={() => setFilter(item)}>
+              {item}
             </button>
           ))}
-          <span>{visibleCampaigns.length} campaigns</span>
+          <span>{syncState === "ready" ? `${visibleCampaigns.length} RESULTS` : "— RESULTS"}</span>
         </div>
 
-        <div className="campaign-grid">
-          {visibleCampaigns.map((campaign) => (
-            <article className="campaign-card" key={campaign.id}>
-              <button className="card-hit-area" onClick={() => setSelectedCampaign(campaign)} aria-label={`Open ${campaign.name}`} />
-              <div className="campaign-card-top">
-                <TokenMark campaign={campaign} />
-                <div className="campaign-title">
-                  <span>{campaign.tag}</span>
-                  <h3>{campaign.name}</h3>
-                </div>
-                <span className={`campaign-status ${campaign.status === "Upcoming" ? "upcoming" : ""}`}><i /> {campaign.status}</span>
-              </div>
-              <div className="reward-block">
-                <span>REWARD POOL</span>
-                <strong>{campaign.prize} <small>{campaign.prizeTicker}</small></strong>
-              </div>
-              <div className="campaign-stats">
-                <div><span>ENDS IN</span><b className="mono">{campaign.ends}</b></div>
-                <div><span>ENTRIES</span><b>{campaign.submissions}</b></div>
-                <div><span>TOP SCORE</span><b>{campaign.topScore}</b></div>
-              </div>
-              <div className="campaign-card-footer">
-                <span className="holder-tag">◈ {campaign.holderBonus} holder boost</span>
-                <button onClick={() => setSelectedCampaign(campaign)}>{campaign.status === "Upcoming" ? "View campaign" : "Enter campaign"} <span>→</span></button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="leaderboard-section" id="leaderboard">
-        <div className="leader-intro">
-          <span className="section-kicker section-kicker--light">THE TOP OF THE TIMELINE</span>
-          <h2>Real reach.<br /><em>Real rewards.</em></h2>
-          <p>
-            Rankings update as posts move through the timeline. Scores reward verified reach, meaningful engagement, and qualified holder time.
-          </p>
-          <div className="score-formula">
-            <span>ATTENTION SCORE</span>
-            <strong>reach × quality <i>+</i> holder proof</strong>
-          </div>
-          <a href="#how-it-works">See how scoring works <span>↗</span></a>
-        </div>
-        <div className="leaderboard-card">
-          <div className="leaderboard-header">
-            <div><TokenMark campaign={campaigns[0]} small /><span><b>BONK Attention Sprint</b><small>Live leaderboard</small></span></div>
-            <span className="live-pill live-pill--dark"><i /> UPDATING LIVE</span>
-          </div>
-          <div className="leader-table" role="table" aria-label="BONK campaign leaderboard">
-            <div className="leader-row leader-labels" role="row">
-              <span># / CREATOR</span><span>VERIFIED VIEWS</span><span>SCORE</span><span>EST. REWARD</span>
+        {syncState === "loading" ? (
+          <EmptyState code="SYNC" title="Loading campaigns" body="Reading the latest public protocol state." />
+        ) : visibleCampaigns.length === 0 ? (
+          <EmptyState code="000" title="No campaigns available" body={dataEmptyBody} />
+        ) : (
+          <div className="campaign-list">
+            <div className="campaign-row campaign-labels" aria-hidden="true">
+              <span>CAMPAIGN</span><span>REWARD POOL</span><span>STATUS</span><span>TIME</span><span>ENTRIES</span><span>ATTENTION</span><span />
             </div>
-            {leaders.map((leader) => (
-              <div className={`leader-row${leader.rank <= 3 ? " leader-row--top" : ""}`} role="row" key={leader.rank}>
-                <div className="leader-person">
-                  <strong>{leader.rank.toString().padStart(2, "0")}</strong>
-                  <span className="avatar">{leader.avatar}</span>
-                  <b>{leader.handle}</b>
+            {visibleCampaigns.map((campaign) => (
+              <article className="campaign-row" key={campaign.id}>
+                <div className="campaign-identity">
+                  <span className="campaign-token">{campaign.ticker.slice(0, 2)}</span>
+                  <div><strong>{campaign.name}</strong><small>${campaign.ticker}</small></div>
                 </div>
-                <span>{leader.views}</span>
-                <span><b>{leader.score}</b>{leader.bonus !== "—" && <small>{leader.bonus}</small>}</span>
-                <span>{leader.prize} <small>$BONK</small></span>
-              </div>
+                <b>{rewardLabel(campaign)}</b>
+                <span className={`status-tag status-tag--${campaign.status}`}><i /> {campaign.status}</span>
+                <span className="display-value countdown">{formatCountdown(campaign.ends_at, now)}</span>
+                <span className="display-value">{formatCompact(campaignActivity.entries.get(campaign.id) ?? 0)}</span>
+                <span className="display-value">{formatCompact(campaignActivity.attention.get(campaign.id) ?? 0)}</span>
+                <button className="row-action" onClick={() => setSelectedCampaign(campaign)}>View Campaign</button>
+              </article>
             ))}
           </div>
-          <button className="table-action" onClick={() => setSelectedCampaign(campaigns[0])}>View full leaderboard <span>→</span></button>
-        </div>
+        )}
       </section>
 
-      <section className="how-section" id="how-it-works">
-        <div className="section-heading">
-          <div><span className="section-kicker">HOW IT WORKS</span><h2>From post to payout.</h2></div>
-          <p>Simple enough to use in a minute. Rigorous enough to reward actual attention.</p>
+      <section className="product-section table-section" id="leaderboard">
+        <div className="section-head">
+          <div><span className="section-label">VERIFIED RANKINGS</span><h2>Leaderboard</h2></div>
+          <span className="section-meta">ATTENTION SCORE / HOLDER PROOF</span>
         </div>
-        <div className="steps-grid">
-          <article>
-            <span className="step-number">01</span>
-            <div className="step-icon">@</div>
-            <h3>Prove who you are</h3>
-            <p>Connect an X account with at least 25 followers and 3 months of history, plus a wallet older than 7 days.</p>
-            <small>ONE ACCOUNT · ONE WALLET · ONE HUMAN</small>
-          </article>
-          <article>
-            <span className="step-number">02</span>
-            <div className="step-icon">↗</div>
-            <h3>Post for a campaign</h3>
-            <p>Choose a live token campaign, make an original post, then drop the X link before the campaign ends.</p>
-            <small>24H · 48H · 72H CAMPAIGNS</small>
-          </article>
-          <article>
-            <span className="step-number">03</span>
-            <div className="step-icon">✦</div>
-            <h3>Earn for attention</h3>
-            <p>Real reach pushes you up the board. Holding the campaign token adds a transparent, time-weighted bonus.</p>
-            <small>HUMAN REVIEW BEFORE EVERY PAYOUT</small>
-          </article>
-        </div>
-        <div className="integrity-banner">
-          <span className="shield">✓</span>
-          <div><b>Proof over noise.</b><p>Every winning submission is manually reviewed for inorganic engagement, recycled posts, and coordinated bot activity before rewards unlock.</p></div>
-          <span className="integrity-label">HUMAN VERIFIED</span>
-        </div>
+        {syncState === "loading" ? (
+          <EmptyState code="SYNC" title="Loading rankings" body="Reading the current leaderboard." />
+        ) : data.leaderboard.length === 0 ? (
+          <EmptyState code="000" title="No rankings yet" body={dataEmptyBody} />
+        ) : (
+          <div className="data-table leaderboard-table" role="table" aria-label="Attention leaderboard">
+            <div className="table-row table-labels" role="row">
+              <span>RANK / CREATOR</span><span>ATTENTION SCORE</span><span>CAMPAIGN</span><span>VERIFIED ATTENTION</span><span>EST. REWARD</span>
+            </div>
+            {data.leaderboard.map((row) => {
+              const campaign = campaignById.get(row.campaign_id);
+              const metric = latestMetricBySubmission.get(row.submission_id);
+              const payout = payoutBySubmission.get(row.submission_id);
+              return (
+                <div className="table-row" role="row" key={row.submission_id}>
+                  <div className="creator-cell"><b>#{row.rank.toString().padStart(2, "0")}</b><span>{row.x_display_name || `@${row.x_username}`}<small>@{row.x_username}</small></span></div>
+                  <strong className="display-value">{formatCompact(Number(row.attention_score || 0))}</strong>
+                  <span>{campaign?.name ?? "—"}</span>
+                  <span className="display-value">{metric ? formatCompact(metric.impression_count) : "—"}</span>
+                  <span>{payout ? payoutLabel(payout, campaign) : "—"}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
-      <section className="cta-section">
-        <div>
-          <span className="section-kicker">YOUR TIMELINE HAS VALUE</span>
-          <h2>Get rewarded<br />for your attention <em>now.</em></h2>
+      <section className="product-section table-section" id="rewards">
+        <div className="section-head">
+          <div><span className="section-label">ONCHAIN HISTORY</span><h2>Recent rewards</h2></div>
+          <span className="section-meta">CONFIRMED PAYOUTS ONLY</span>
         </div>
-        <div className="cta-actions">
-          <button className="button button--dark button--wide" onClick={xConnected ? connectWallet : connectX}>
-            {fullyConnected ? "Explore campaigns" : xConnected ? "Connect wallet" : "Connect X + wallet"} <span>↗</span>
-          </button>
-          <p>No cost to enter. Rewards are funded upfront.</p>
+        {syncState === "loading" ? (
+          <EmptyState code="SYNC" title="Loading rewards" body="Reading confirmed payout history." />
+        ) : data.payouts.length === 0 ? (
+          <EmptyState code="000" title="No rewards distributed" body={dataEmptyBody} />
+        ) : (
+          <div className="data-table rewards-table" role="table" aria-label="Recent protocol rewards">
+            <div className="table-row table-labels" role="row">
+              <span>CREATOR</span><span>CAMPAIGN</span><span>REWARD</span><span>TIMESTAMP</span>
+            </div>
+            {data.payouts.map((payout) => {
+              const campaign = campaignById.get(payout.campaign_id);
+              const account = accountByUser.get(payout.user_id);
+              return (
+                <div className="table-row" role="row" key={payout.id}>
+                  <strong>{account ? `@${account.username}` : "—"}</strong>
+                  <span>{campaign?.name ?? "—"}</span>
+                  <span className="reward-value">{payoutLabel(payout, campaign)}</span>
+                  <time dateTime={payout.confirmed_at}>{formatDate(payout.confirmed_at)}</time>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="faq-section product-section" id="faq">
+        <div className="section-head">
+          <div><span className="section-label">PROTOCOL REFERENCE</span><h2>FAQ</h2></div>
+        </div>
+        <div className="faq-list">
+          <details><summary>Who can participate?<span>+</span></summary><p>An eligible X account needs at least 25 followers and three months of history. The connected Solana wallet must be at least seven days old.</p></details>
+          <details><summary>What determines Attention Score?<span>+</span></summary><p>POA uses verified post performance and the campaign&apos;s configured holder proof. The active formula version and score components are recorded with each snapshot.</p></details>
+          <details><summary>How are campaigns funded?<span>+</span></summary><p>Projects define the duration and reward asset, then fund the campaign before it moves into the live marketplace.</p></details>
+          <details><summary>When are rewards distributed?<span>+</span></summary><p>Winning submissions pass the configured review process before confirmed payouts appear in the public reward history.</p></details>
         </div>
       </section>
 
       <footer>
-        <a className="brand brand--footer" href="#top"><img className="brand-logo brand-logo--footer" src="poa-logo.jpg" alt="" /><span className="brand-name"><b>POA</b> proof of attention</span></a>
-        <p>Attention belongs to the people who create it.</p>
-        <div><a href="#campaigns">Campaigns</a><a href="#how-it-works">Scoring</a><button onClick={() => setShowCreate(true)}>Launch</button><a href="#top">X / Twitter ↗</a></div>
-        <small>© 2026 POA · BUILT ON SOLANA</small>
+        <BrandMark compact />
+        <p>Turn attention into proof.</p>
+        <div><a href="#campaigns">Campaigns</a><a href="#leaderboard">Leaderboard</a><a href="#faq">FAQ</a></div>
+        <small>© 2026 PROOF OF ATTENTION / SOLANA</small>
       </footer>
 
-      {selectedCampaign && !showSubmit && (
-        <div className="modal-layer" role="dialog" aria-modal="true" aria-label={`${selectedCampaign.name} details`}>
-          <button className="modal-backdrop" onClick={() => setSelectedCampaign(null)} aria-label="Close campaign details" />
-          <div className="campaign-drawer">
-            <CloseButton onClick={() => setSelectedCampaign(null)} />
-            <div className="drawer-head">
-              <TokenMark campaign={selectedCampaign} />
-              <span className="campaign-status"><i /> {selectedCampaign.status}</span>
-              <span className="section-kicker">{selectedCampaign.tag.toUpperCase()} CAMPAIGN</span>
-              <h2>{selectedCampaign.name}</h2>
-              <p>{selectedCampaign.description}</p>
-            </div>
-            <div className="drawer-reward">
-              <span>TOTAL REWARDS</span>
-              <strong>{selectedCampaign.prize} <small>{selectedCampaign.prizeTicker}</small></strong>
-              <i>Fully funded</i>
-            </div>
-            <div className="drawer-meta">
-              <div><span>TIME LEFT</span><b className="mono">{selectedCampaign.ends}</b></div>
-              <div><span>DURATION</span><b>{selectedCampaign.duration}</b></div>
-              <div><span>CREATORS</span><b>{selectedCampaign.participants}</b></div>
-            </div>
-            <div className="drawer-rules">
-              <span className="section-kicker">HOW TO QUALIFY</span>
-              <ul>
-                <li><i>01</i><span>Post original content on X during the live campaign.</span></li>
-                <li><i>02</i><span>Mention ${selectedCampaign.ticker} and keep the post public.</span></li>
-                <li><i>03</i><span>Submit one post. Winners pass a final human review.</span></li>
-              </ul>
-            </div>
-            <div className="drawer-bonus">
-              <span>◈</span><div><b>{selectedCampaign.holderBonus} holder boost</b><p>Bonus is based on token balance and time held during the campaign.</p></div>
-            </div>
-            <button className="button button--acid button--wide" onClick={() => openSubmission(selectedCampaign)} disabled={selectedCampaign.status === "Upcoming"}>
-              {selectedCampaign.status === "Upcoming" ? "Campaign opens tomorrow" : fullyConnected ? "Submit your post" : "Connect to enter"} <span>↗</span>
-            </button>
+      {(selectedCampaign || showLaunch) && (
+        <div className="modal-layer" role="dialog" aria-modal="true" aria-label={selectedCampaign ? selectedCampaign.name : "Launch campaign"}>
+          <button className="modal-backdrop" onClick={() => { setSelectedCampaign(null); setShowLaunch(false); }} aria-label="Close dialog" />
+          <div className="protocol-modal">
+            <button className="modal-close" onClick={() => { setSelectedCampaign(null); setShowLaunch(false); }} aria-label="Close dialog">×</button>
+            {selectedCampaign ? (
+              <>
+                <span className="section-label">CAMPAIGN / {selectedCampaign.status.toUpperCase()}</span>
+                <div className="modal-title-row"><span className="campaign-token">{selectedCampaign.ticker.slice(0, 2)}</span><div><h2>{selectedCampaign.name}</h2><p>${selectedCampaign.ticker}</p></div></div>
+                <dl className="modal-data">
+                  <div><dt>Reward pool</dt><dd>{rewardLabel(selectedCampaign)}</dd></div>
+                  <div><dt>Time remaining</dt><dd className="countdown">{formatCountdown(selectedCampaign.ends_at, now)}</dd></div>
+                  <div><dt>Entries</dt><dd>{formatCompact(campaignActivity.entries.get(selectedCampaign.id) ?? 0)}</dd></div>
+                  <div><dt>Verified attention</dt><dd>{formatCompact(campaignActivity.attention.get(selectedCampaign.id) ?? 0)}</dd></div>
+                </dl>
+                <button className="button-primary button-wide" onClick={() => requestConnection("X")}>Connect to Enter</button>
+              </>
+            ) : (
+              <>
+                <span className="section-label">PROJECT ACCESS</span>
+                <h2>Launch a campaign</h2>
+                <p className="modal-copy">Connect an eligible X account and Solana wallet to continue. Campaigns must be funded before they can enter the marketplace.</p>
+                <div className="modal-actions">
+                  <button className="button-secondary" onClick={() => requestConnection("X")}>Connect X</button>
+                  <button className="button-primary" onClick={() => requestConnection("Wallet")}>Connect Wallet</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {showSubmit && selectedCampaign && (
-        <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Submit a post">
-          <button className="modal-backdrop" onClick={() => setShowSubmit(false)} aria-label="Close submission form" />
-          <form className="center-modal" onSubmit={handleSubmission}>
-            <CloseButton onClick={() => setShowSubmit(false)} />
-            <span className="section-kicker">ENTER CAMPAIGN</span>
-            <h2>Submit your post.</h2>
-            <div className="selected-campaign-mini"><TokenMark campaign={selectedCampaign} small /><b>{selectedCampaign.name}</b><span>{selectedCampaign.ends}</span></div>
-            <label htmlFor="post-url">X post URL</label>
-            <input id="post-url" type="url" required placeholder="https://x.com/you/status/…" />
-            <div className="eligibility-checks">
-              <span><i>✓</i> X account: eligible</span>
-              <span><i>✓</i> Wallet age: eligible</span>
-              <span><i>✓</i> Holder proof: tracking</span>
-            </div>
-            <p className="form-note">By submitting, you confirm this is your original post and agree to a manual authenticity review before payout.</p>
-            <button className="button button--dark button--wide" type="submit">{submitted ? "Post submitted ✓" : "Start attention tracking"}</button>
-          </form>
-        </div>
-      )}
-
-      {showCreate && (
-        <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Create a campaign">
-          <button className="modal-backdrop" onClick={() => setShowCreate(false)} aria-label="Close campaign creation form" />
-          <form className="center-modal create-modal" onSubmit={handleCreate}>
-            <CloseButton onClick={() => setShowCreate(false)} />
-            <span className="section-kicker">FUND ATTENTION</span>
-            <h2>Launch a campaign.</h2>
-            <p className="modal-lede">Set the signal, fund the reward pool, and let creators compete for real reach.</p>
-            <div className="form-split">
-              <label>Campaign name<input required placeholder="e.g. The BONK Attention Sprint" /></label>
-              <label>Token ticker<input required placeholder="$TOKEN" /></label>
-            </div>
-            <label>What should creators post about?<textarea required placeholder="Give the timeline one clear creative direction…" /></label>
-            <div className="form-split">
-              <label>Reward amount<input required type="number" min="1" placeholder="100,000" /></label>
-              <label>Funding asset<select defaultValue="Token"><option>Token</option><option>SOL</option></select></label>
-            </div>
-            <fieldset>
-              <legend>Campaign length</legend>
-              <div className="duration-picker"><label><input type="radio" name="duration" value="24" />24 hours</label><label><input type="radio" name="duration" value="48" defaultChecked />48 hours</label><label><input type="radio" name="duration" value="72" />72 hours</label></div>
-            </fieldset>
-            <button className="button button--acid button--wide" type="submit">Continue to funding <span>→</span></button>
-            <small className="funding-note">Campaigns go live only after the entire reward pool is funded onchain.</small>
-          </form>
-        </div>
-      )}
-
-      {showProfile && (
-        <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Proof profile">
-          <button className="modal-backdrop" onClick={() => setShowProfile(false)} aria-label="Close profile" />
-          <div className="profile-popover">
-            <CloseButton onClick={() => setShowProfile(false)} />
-            <div className="profile-avatar">M</div>
-            <span className="verified-label">✓ PROOF VERIFIED</span>
-            <h3>@matthew</h3>
-            <p>7xKd…POA9</p>
-            <div className="profile-stats"><span><b>12.8K</b>followers</span><span><b>4.1 yrs</b>account age</span><span><b>2.0 yrs</b>wallet age</span></div>
-            <div className="profile-score">
-              <div><span>ALL-TIME ATTENTION</span><b>124,880</b></div>
-              <span>TOP 8%</span>
-            </div>
-            <button className="button button--ghost button--wide" onClick={() => { setShowProfile(false); setToast("Connections refreshed"); }}>Refresh proof</button>
-          </div>
-        </div>
-      )}
-
-      {toast && <div className="toast" role="status"><i>✓</i>{toast}</div>}
+      {notice && <div className="notice" role="status"><i />{notice}</div>}
     </main>
   );
 }

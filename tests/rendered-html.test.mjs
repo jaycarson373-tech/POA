@@ -21,11 +21,11 @@ test("server-renders the POA product", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>POA — Proof of Attention<\/title>/i);
-  assert.match(html, /Attention is/);
-  assert.match(html, /the economy/);
-  assert.match(html, /Compete for attention/);
-  assert.match(html, /BONK Attention Sprint/);
-  assert.match(html, /Get rewarded/);
+  assert.match(html, /Turn attention into proof/);
+  assert.match(html, /Projects launch campaigns/);
+  assert.match(html, /Loading campaigns/);
+  assert.match(html, /Loading rankings/);
+  assert.match(html, /Loading rewards/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
@@ -37,23 +37,23 @@ test("ships the complete launch surface without starter artifacts", async () => 
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Connect X \+ wallet/);
-  assert.match(page, /Launch a campaign/);
-  assert.match(page, /Start attention tracking/);
+  assert.match(page, /Connect X/);
+  assert.match(page, /Connect Wallet/);
+  assert.match(page, /Launch Campaign/);
+  assert.match(page, /NEXT_PUBLIC_SUPABASE_URL/);
   assert.match(page, /25 followers/);
-  assert.match(page, /wallet older than 7 days/);
-  assert.match(page, /poa-logo\.jpg/);
-  assert.match(page, /poa-banner\.jpg/);
-  assert.match(layout, /\/poa-banner\.jpg/);
+  assert.match(page, /seven days old/);
+  assert.match(page, /poa-wordmark\.jpg/);
+  assert.match(layout, /\/poa-wordmark\.jpg/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /codex-preview|SkeletonPreview/);
+  assert.doesNotMatch(page, /BONK Attention Sprint|@solmason|250M|12\.8M|\$184K/);
 
   await Promise.all([
     access(new URL("../app/icon.png", import.meta.url)),
     access(new URL("../app/apple-icon.png", import.meta.url)),
-    access(new URL("../public/poa-logo.jpg", import.meta.url)),
-    access(new URL("../public/poa-banner.jpg", import.meta.url)),
+    access(new URL("../public/poa-wordmark.jpg", import.meta.url)),
   ]);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
