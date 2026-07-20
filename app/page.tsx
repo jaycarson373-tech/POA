@@ -82,7 +82,10 @@ const EMPTY_DATA: ProtocolData = {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim() ?? "";
+const CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim() ||
+  "8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump";
+const X_ACCOUNT_URL = "https://x.com/POA_solana";
 const PAGE_SIZE = 1000;
 
 async function fetchAllRows<T>(resource: string): Promise<T[]> {
@@ -362,7 +365,21 @@ export default function Home() {
           <a href="#faq">FAQ</a>
         </nav>
         <div className="connection-actions">
-          <button onClick={() => requestConnection("X")}>Connect X</button>
+          <button className="header-contract" onClick={copyContract} aria-label="Copy POA contract address">
+            <span>CA</span>
+            <b>{`${CONTRACT_ADDRESS.slice(0, 4)}…${CONTRACT_ADDRESS.slice(-4)}`}</b>
+            <i>{notice === "Contract address copied." ? "COPIED" : "COPY"}</i>
+          </button>
+          <a
+            className="header-x-link"
+            href={X_ACCOUNT_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open Proof of Attention on X"
+          >
+            X <span>/ @POA_SOLANA</span>
+          </a>
+          <button className="connect-x-button" onClick={() => requestConnection("X")}>Connect X</button>
           <button className="button-primary button-small" onClick={() => requestConnection("Wallet")}>Connect Wallet</button>
         </div>
       </header>
@@ -389,13 +406,6 @@ export default function Home() {
             <button className="button-primary" onClick={() => setShowLaunch(true)}>Launch Campaign</button>
             <a className="button-secondary" href="#campaigns">Browse Campaigns</a>
           </div>
-          {CONTRACT_ADDRESS && (
-            <button className="contract-address" onClick={copyContract} aria-label="Copy contract address">
-              <span>CONTRACT</span>
-              <b>{`${CONTRACT_ADDRESS.slice(0, 8)}…${CONTRACT_ADDRESS.slice(-8)}`}</b>
-              <i>COPY</i>
-            </button>
-          )}
         </div>
 
         <aside className="live-module" aria-label="Live protocol data">

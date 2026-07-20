@@ -26,6 +26,8 @@ test("server-renders the POA product", async () => {
   assert.match(html, /Loading campaigns/);
   assert.match(html, /Loading rankings/);
   assert.match(html, /Loading rewards/);
+  assert.match(html, /8MWh…pump/);
+  assert.match(html, /POA_SOLANA/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
@@ -40,6 +42,8 @@ test("ships the complete launch surface without starter artifacts", async () => 
   assert.match(page, /Connect X/);
   assert.match(page, /Connect Wallet/);
   assert.match(page, /Launch Campaign/);
+  assert.match(page, /https:\/\/x\.com\/POA_solana/);
+  assert.match(page, /8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump/);
   assert.match(page, /NEXT_PUBLIC_SUPABASE_URL/);
   assert.match(page, /25 followers/);
   assert.match(page, /seven days old/);
