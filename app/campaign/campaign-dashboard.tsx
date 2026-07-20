@@ -605,7 +605,7 @@ export default function CampaignDashboard() {
               <div className="dashboard-section-head"><div><span>PROTOCOL BUYBACKS</span><h2>POA fee loop</h2></div><small>{data.buybacks.available ? "LEDGER CONNECTED" : "LEDGER NOT DEPLOYED"}</small></div>
               <div className="buyback-policy">
                 <div><span>EXECUTION WINDOW</span><strong>5 MIN</strong><small>Requested policy interval</small></div>
-                <div><span>BUYBACK ALLOCATION</span><strong>50%</strong><small>Of eligible SOL after reserve</small></div>
+                <div><span>BUYBACK ALLOCATION</span><strong>20%</strong><small>Of eligible SOL after reserve</small></div>
                 <div><span>CONFIRMED BUYBACKS</span><strong>{data.buybacks.available ? data.buybacks.rows.length : "—"}</strong><small>Signed and confirmed swaps only</small></div>
                 <div><span>CONFIRMED SOL DEPLOYED</span><strong>{data.buybacks.available ? `${formatTokenAmount(confirmedBuybackSol.toString(), 9, 4)} SOL` : "—"}</strong><small>No quote or pending transaction counted</small></div>
               </div>

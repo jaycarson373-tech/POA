@@ -20,7 +20,7 @@ type HolderPosition = {
 };
 type LeaderboardRow = { submission_id: string; attention_score: string; rank: number };
 type RewardEpoch = { id: string };
-type RewardPayout = { id: string };
+type RewardPayout = { id: string; submission_id: string };
 type BuybackEpoch = { id: string };
 
 export class ProtocolJobs {
@@ -240,6 +240,7 @@ export class ProtocolJobs {
       const accountByUser = new Map(accounts.map((row) => [row.user_id, row]));
       const positionByWallet = new Map(positions.map((row) => [row.wallet_id, row]));
       const walletAgeCutoff = Date.now() - this.config.walletMinimumAgeDays * 86_400_000;
+      const seenUsers = new Set<string>();
       const eligible = leaderboard.flatMap((row) => {
         const submission = submissionById.get(row.submission_id);
         if (!submission) return [];
@@ -258,6 +259,8 @@ export class ProtocolJobs {
           || !Number.isFinite(score)
           || score <= 0
         ) return [];
+        if (seenUsers.has(submission.user_id)) return [];
+        seenUsers.add(submission.user_id);
         return [{ row, submission, wallet, score }];
       }).slice(0, this.config.rewardMaxRecipients);
 
@@ -307,6 +310,7 @@ export class ProtocolJobs {
         wallet_address: item.wallet.address,
         status: this.config.rewardMode === "dry_run" ? "dry_run" : "queued",
       })));
+      const payoutBySubmission = new Map(payoutRows.map((row) => [row.submission_id, row]));
 
       if (this.config.rewardMode === "dry_run") {
         await this.finishEpoch(epoch.id, "dry_run", 0, allocations.reduce((sum, item) => sum + item.amount, BigInt(0)));
@@ -323,7 +327,8 @@ export class ProtocolJobs {
       let distributed = BigInt(0);
       for (let index = 0; index < allocations.length; index += 1) {
         const allocation = allocations[index];
-        const payout = payoutRows[index] as { id: string };
+        const payout = payoutBySubmission.get(allocation.submission.id);
+        if (!payout) throw new Error(`Reward payout row was not returned for submission ${allocation.submission.id}`);
         try {
           const signature = await this.solana.sendSplToken({
             secret: this.config.rewardWalletSecret,

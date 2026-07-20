@@ -654,7 +654,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
       missing: readiness.missing,
       reward_mode: config.rewardMode,
       reward_interval_seconds: config.rewardIntervalSeconds,
+      reward_epoch_amount_raw: config.rewardBudgetRaw.toString(),
       minimum_holder_tokens: config.minimumHolderTokens.toString(),
+      buyback_mode: config.buybackMode,
+      buyback_interval_seconds: config.buybackIntervalSeconds,
+      buyback_allocation_bps: config.buybackAllocationBps,
+      buyback_reserve_lamports: config.buybackReserveLamports.toString(),
     });
   }
   if (!readiness.ready) throw new HttpError(503, `Worker configuration is incomplete: ${readiness.missing.join(", ")}`);
@@ -723,6 +728,6 @@ const server = createServer((request, response) => {
 });
 
 server.listen(config.port, "0.0.0.0", () => {
-  console.log(`POA worker listening on ${config.port}; rewards=${config.rewardMode}; buybacks=${config.buybackMode}; interval=${config.rewardIntervalSeconds}s`);
+  console.log(`POA worker listening on ${config.port}; rewards=${config.rewardMode}/${config.rewardIntervalSeconds}s; buybacks=${config.buybackMode}/${config.buybackIntervalSeconds}s/${config.buybackAllocationBps}bps`);
   runJobs();
 });

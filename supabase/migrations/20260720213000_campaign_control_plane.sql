@@ -117,7 +117,7 @@ create table public.buyback_epochs (
   epoch_started_at timestamptz not null,
   epoch_ended_at timestamptz not null,
   interval_seconds integer not null default 300 check (interval_seconds >= 60),
-  allocation_bps integer not null default 5000 check (allocation_bps between 1 and 10000),
+  allocation_bps integer not null default 2000 check (allocation_bps between 1 and 10000),
   treasury_balance_lamports numeric(78, 0) check (treasury_balance_lamports is null or treasury_balance_lamports >= 0),
   reserve_lamports numeric(78, 0) not null default 0 check (reserve_lamports >= 0),
   eligible_lamports numeric(78, 0) check (eligible_lamports is null or eligible_lamports >= 0),

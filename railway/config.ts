@@ -34,7 +34,7 @@ export function loadConfig() {
   const rewardMode = mode("AUTO_REWARDS_MODE", "disabled");
   const buybackMode = mode("BUYBACK_MODE", "disabled");
   const rewardBudgetRaw = bigintValue("POA_REWARD_EPOCH_AMOUNT_RAW");
-  const buybackAllocationBps = integer("BUYBACK_ALLOCATION_BPS", 5000, 1);
+  const buybackAllocationBps = integer("BUYBACK_ALLOCATION_BPS", 2000, 1);
   if (buybackAllocationBps > 10_000) throw new Error("BUYBACK_ALLOCATION_BPS cannot exceed 10000");
 
   return {
@@ -90,7 +90,9 @@ export function configReadiness(config: WorkerConfig) {
   if (!config.tokenEncryptionKey) missing.push("TOKEN_ENCRYPTION_KEY");
   if (config.rewardMode === "live") {
     if (!config.rewardWalletSecret) missing.push("POA_REWARD_WALLET_PRIVATE_KEY");
+    if (!config.rewardWalletExpectedAddress) missing.push("POA_REWARD_WALLET_PUBLIC_KEY");
     if (config.rewardBudgetRaw <= BigInt(0)) missing.push("POA_REWARD_EPOCH_AMOUNT_RAW");
+    if (config.rewardWalletMinReserveRaw <= BigInt(0)) missing.push("POA_REWARD_WALLET_MIN_RESERVE_RAW");
   }
   if (config.buybackMode !== "disabled" && !config.buybackWalletExpectedAddress) {
     missing.push("BUYBACK_WALLET_PUBLIC_KEY");
