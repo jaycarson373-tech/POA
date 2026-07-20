@@ -41,6 +41,9 @@ test("ships the complete launch surface without starter artifacts", async () => 
 
   assert.match(page, /Connect X/);
   assert.match(page, /Connect Wallet/);
+  assert.match(page, /Disconnect Wallet/);
+  assert.match(page, /getWallets/);
+  assert.match(page, /StandardDisconnect/);
   assert.match(page, /Launch Campaign/);
   assert.match(page, /https:\/\/x\.com\/POA_solana/);
   assert.match(page, /8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump/);
