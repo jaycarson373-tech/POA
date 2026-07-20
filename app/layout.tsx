@@ -20,19 +20,19 @@ const siteUrl = (
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "POA — Proof of Attention",
-  description: "Onchain rewards for real attention. Compete in token-funded campaigns and earn for the reach you create.",
+  description: "Turn attention into proof. Projects fund campaigns, creators generate attention, and verified performance earns rewards.",
   openGraph: {
     title: "POA — Proof of Attention",
-    description: "Attention is the economy. Onchain rewards for real reach.",
+    description: "Turn attention into proof.",
     type: "website",
     url: siteUrl,
-    images: [{ url: `${siteUrl}/poa-banner.jpg`, width: 1280, height: 426, alt: "POA — Proof of Attention" }],
+    images: [{ url: `${siteUrl}/poa-wordmark.jpg`, width: 1254, height: 1254, alt: "Proof of Attention" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "POA — Proof of Attention",
-    description: "Attention is the economy. Onchain rewards for real reach.",
-    images: [`${siteUrl}/poa-banner.jpg`],
+    description: "Turn attention into proof.",
+    images: [`${siteUrl}/poa-wordmark.jpg`],
   },
 };
 
