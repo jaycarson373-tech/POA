@@ -11,18 +11,19 @@ The repository contains a real-data frontend with:
 
 - Supabase-backed campaign discovery, protocol totals, rankings, and rewards
 - a separate per-campaign dashboard with verified X performance and activity
-- Wallet Standard connect, reconnect, copy-address, and disconnect controls
+- Supabase X OAuth, encrypted provider-token storage, and X eligibility gates
+- Wallet Standard connect plus signed ownership and seven-day age verification
 - honest empty and unavailable states instead of demonstration records
 - POA-first campaign ordering when a real POA campaign row exists
-- campaign-review, refund, holder-position, market-snapshot, fee, and buyback
-  accounting schema
+- a Railway API/worker for scoring, five-minute reward epochs, campaign funding,
+  admin review, refunds, and SOL/SPL payouts
 - responsive desktop and mobile layouts and custom social metadata
 
-X sign-in, wallet ownership verification, campaign submission, background
-indexers, and transaction signing are not implemented yet. The dashboard keeps
-identity-scoped holdings, hold time, impressions, and rank locked until those
-services can return a verified user. Buybacks are not described as active until
-the public ledger contains a confirmed onchain transaction.
+The automatic POA reward path fails closed unless Railway is explicitly set to
+`AUTO_REWARDS_MODE=live`, a per-epoch budget is configured, and the limited hot
+wallet key matches its configured public address. Buybacks use the same
+idempotent five-minute epoch pattern and Jupiter Swap V2; only a confirmed
+onchain result is displayed as completed.
 
 Live site: [proofofattention.fun](https://www.proofofattention.fun/)
 
@@ -53,7 +54,7 @@ npm test
 npm run build
 ```
 
-## Planned production services
+## Production services
 
 - **Supabase:** PostgreSQL source of truth, row-level security, campaigns,
   identities, submissions, metric snapshots, reviews, and payouts.
@@ -63,8 +64,8 @@ npm run build
   post lookup, and organic/public metrics.
 - **Solana RPC/indexer:** wallet-age verification, SPL balances, holder-time
   snapshots, funding confirmation, and payout transaction status.
-- **Secure signer:** multisig or managed signer for production payouts. Never
-  place a raw treasury private key in an ordinary environment variable.
+- **Railway sealed signers:** separate limited-balance reward and campaign
+  collection hot wallets. Signer values are server-only and never browser-exposed.
 
 Copy `.env.example` to `.env.local` when the production services are ready.
 Only public browser values may use the `NEXT_PUBLIC_` prefix.
@@ -78,12 +79,18 @@ with separate Vercel and Railway environment templates in [`deploy/`](deploy/).
 
 - `app/page.tsx` — POA protocol home and real public-data marketplace
 - `app/campaign/` — per-campaign control dashboard
+- `app/account/` — X OAuth and signed Solana-wallet eligibility
+- `app/apply/` — vetted campaign application and funding verification
+- `app/admin/` — application/submission review and payout finalization
+- `railway/` — production API, scanners, scoring, and transaction worker
 - `app/globals.css` — visual system and responsive layouts
 - `app/layout.tsx` — metadata and social preview configuration
 - `public/og.png` — POA social sharing card
 - `tests/rendered-html.test.mjs` — rendered-product checks
 - `supabase/migrations/20260720213000_campaign_control_plane.sql` — vetted
   campaign, refund, holder-position, market, fee, and buyback control plane
+- `supabase/migrations/20260720220000_operational_backend.sql` — wallet/X gates,
+  campaign applications, reward epochs, and automatic payout ledger
 
 ## Reward model
 

@@ -73,6 +73,17 @@ type PayoutRecord = {
   confirmed_at: string;
 };
 
+type AutoPayoutRecord = {
+  id: string;
+  campaign_id: string;
+  submission_id: string;
+  user_id: string;
+  amount_raw: string;
+  token_mint: string;
+  rank: number;
+  confirmed_at: string;
+};
+
 type XAccountRecord = {
   user_id: string;
   username: string;
@@ -158,6 +169,14 @@ async function fetchAllRows<T>(resource: string): Promise<T[]> {
   }
 
   return rows;
+}
+
+async function fetchOptionalRows<T>(resource: string): Promise<T[]> {
+  try {
+    return await fetchAllRows<T>(resource);
+  } catch {
+    return [];
+  }
 }
 
 function formatTokenAmount(raw: string, decimals: number, maxFraction = 2) {
@@ -299,7 +318,7 @@ export default function Home() {
     setSyncState("loading");
 
     try {
-      const [campaigns, submissions, leaderboard, metrics, payouts, accounts] = await Promise.all([
+      const [campaigns, submissions, leaderboard, metrics, payouts, autoPayouts, accounts] = await Promise.all([
         fetchAllRows<CampaignRecord>(
           "campaigns?select=id,slug,name,ticker,token_mint,reward_kind,reward_amount_raw,reward_decimals,status,starts_at,ends_at,created_at&status=in.(upcoming,live,review,finalized)&order=created_at.desc",
         ),
@@ -315,10 +334,17 @@ export default function Home() {
         fetchAllRows<PayoutRecord>(
           "payouts?select=id,campaign_id,submission_id,user_id,amount_raw,asset_mint,rank,confirmed_at&status=eq.confirmed&order=confirmed_at.desc",
         ),
+        fetchOptionalRows<AutoPayoutRecord>(
+          "reward_epoch_payouts?select=id,campaign_id,submission_id,user_id,amount_raw,token_mint,rank,confirmed_at&status=eq.confirmed&order=confirmed_at.desc",
+        ),
         fetchAllRows<XAccountRecord>("x_accounts?select=user_id,username,display_name"),
       ]);
 
-      setData({ campaigns, submissions, leaderboard, metrics, payouts, accounts });
+      const combinedPayouts = [
+        ...payouts,
+        ...autoPayouts.map((payout) => ({ ...payout, asset_mint: payout.token_mint })),
+      ].sort((left, right) => new Date(right.confirmed_at).getTime() - new Date(left.confirmed_at).getTime());
+      setData({ campaigns, submissions, leaderboard, metrics, payouts: combinedPayouts, accounts });
       setSyncState("ready");
     } catch {
       setData(EMPTY_DATA);
@@ -487,7 +513,7 @@ export default function Home() {
   const showValue = (value: number) => (syncState === "ready" ? formatCompact(value) : "—");
 
   const requestXConnection = () => {
-    setNotice("X connection is not available on this deployment yet.");
+    window.location.assign("/account/");
   };
 
   const connectWallet = () => {
@@ -598,7 +624,7 @@ export default function Home() {
                 <i>{notice === "Wallet address copied." ? "COPIED" : "COPY"}</i>
               </button>
               <button className="wallet-disconnect" onClick={() => void disconnectWallet()} disabled={disconnecting}>
-                <span className="wallet-disconnect-wide">{disconnecting ? "Disconnecting" : "Disconnect"}</span>
+                    <span className="wallet-disconnect-wide">{disconnecting ? "Disconnecting" : "Disconnect Wallet"}</span>
                 <span className="wallet-disconnect-compact">OUT</span>
               </button>
             </>
@@ -891,11 +917,7 @@ export default function Home() {
             <div className="review-note"><i /> TEAM REVIEW REQUIRED / NO AUTOMATIC LISTINGS</div>
             <div className="modal-actions">
               <button className="button-secondary" onClick={requestXConnection}>Connect X</button>
-              {connected && walletAddress ? (
-                <button className="button-primary" onClick={() => void disconnectWallet()}>Disconnect Wallet</button>
-              ) : (
-                <button className="button-primary" onClick={connectWallet}>Connect Wallet</button>
-              )}
+              <Link className="button-primary" href="/apply/">Open application</Link>
             </div>
           </div>
         </div>

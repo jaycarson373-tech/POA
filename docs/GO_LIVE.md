@@ -15,7 +15,9 @@ identity-scoped statistics and signed transactions.
 4. Click **Run** once.
 5. In a new query, run
    `supabase/migrations/20260720213000_campaign_control_plane.sql` once.
-6. Open **Table Editor** and confirm that `campaigns`, `submissions`,
+6. In a third query, run
+   `supabase/migrations/20260720220000_operational_backend.sql` once.
+7. Open **Table Editor** and confirm that `campaigns`, `submissions`,
    `x_metric_snapshots`, `holder_snapshots`, `score_snapshots`, and `payouts`
    exist, along with the campaign control-plane tables.
 
@@ -29,8 +31,8 @@ In Supabase:
 1. Open **Authentication → URL Configuration**.
 2. Set **Site URL** to `https://YOUR-POA-DOMAIN.com`.
 3. Add these redirect URLs:
-   - `http://localhost:3000/auth/callback`
-   - `https://YOUR-POA-DOMAIN.com/auth/callback`
+   - `http://localhost:3000/account`
+   - `https://YOUR-POA-DOMAIN.com/account`
 4. Open **Authentication → Providers → X / Twitter (OAuth 2.0)**.
 5. Copy the Supabase provider callback URL. It will look like:
    `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`.
@@ -38,16 +40,16 @@ In Supabase:
 In the X Developer Console:
 
 1. Create a Project and OAuth 2.0 App.
-2. Choose **Web App** with read permissions.
+2. Choose **Web App, Automated App or Bot** with read permissions.
 3. Set the X callback URL to the Supabase provider callback URL from above.
 4. Set the website URL to the production POA domain.
 5. Save the Client ID, Client Secret, and Bearer Token securely.
 6. Purchase enough X API credits before enabling metric polling.
 
 Return to Supabase, enable the X provider, and paste the X Client ID and Client
-Secret there. The application will request `tweet.read users.read
-offline.access`. X provider access and refresh tokens will be encrypted before
-POA stores them.
+Secret there. The application requests `tweet.read users.read follows.read
+offline.access`. X provider access and refresh tokens are encrypted before POA
+stores them.
 
 ## 3. Create the Vercel frontend
 
@@ -62,7 +64,7 @@ POA stores them.
 8. Update `NEXT_PUBLIC_APP_URL`, the Supabase Site URL, and redirect URLs if the
    final domain changed. Redeploy after changing Vercel variables.
 
-Generate the two shared secrets locally:
+Generate two server-only secrets locally:
 
 ```bash
 openssl rand -base64 32
@@ -70,8 +72,8 @@ openssl rand -base64 32
 ```
 
 Use one output as `TOKEN_ENCRYPTION_KEY` and the other as
-`INTERNAL_API_SECRET`. Store the same values in Vercel and Railway. Do not send
-the values through chat or commit them to GitHub.
+`INTERNAL_API_SECRET`. Store them only in Railway. Do not send the values
+through chat or commit them to GitHub.
 
 ## 4. Create the Railway worker/API service
 
@@ -79,35 +81,39 @@ the values through chat or commit them to GitHub.
 2. Add a service from the same GitHub repository and name it `poa-workers`.
 3. Paste `deploy/railway.env.example` into the service's **Variables → Raw
    Editor** and replace every placeholder.
-4. Get `DATABASE_URL` from Supabase's **Connect** dialog. Use the Shared Pooler
-   **Session mode** URL on port `5432` for the persistent Railway worker.
-5. Generate `CRON_SECRET` with `openssl rand -base64 32`.
-6. Seal `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `X_CLIENT_SECRET`,
-   `X_BEARER_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, and
-   `CRON_SECRET` in Railway after confirming they work.
+4. Add a Railway public domain and copy it into Vercel as
+   `NEXT_PUBLIC_RAILWAY_API_URL`, then redeploy Vercel.
+5. Seal `SUPABASE_SERVICE_ROLE_KEY`, `X_BEARER_TOKEN`,
+   `TOKEN_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, both wallet private keys, and
+   the private RPC URL in Railway.
 
-The worker process and API routes are the next implementation step. It will own
-X polling, wallet indexing, scoring, campaign transitions, review finalization,
-market snapshots, payout preparation, and the buyback execution ledger.
+The committed worker owns X polling, signed wallet verification, scoring,
+campaign transitions, application funding verification, review finalization,
+and reward transactions. Railway health checks `/health` before routing traffic.
 
 ## 5. Solana setup
 
 Create a private mainnet RPC/indexer endpoint and use its HTTPS URL as
-`SOLANA_RPC_URL` in both services. Do not use a browser-exposed public variable
-for a paid RPC key.
+`SOLANA_RPC_URL` in Railway. Do not use a browser-exposed public variable for a
+paid RPC key.
 
-Use a public treasury address for `TREASURY_PUBLIC_KEY`. Launch with
-`PAYOUT_MODE=manual` and approve payouts through a multisig or hardware wallet.
-Do not store a raw treasury private key in Vercel, Railway, Supabase, GitHub, or
-chat.
+Create two limited-balance wallets: a POA five-minute reward wallet and a
+separate sponsor-campaign collection wallet. Put their public addresses in the
+matching public-key variables. Paste each secret only into its Railway sealed
+variable; never put it in Vercel, Supabase, GitHub, logs, or chat. Fund only the
+amount required for a short operating window and keep the main treasury out of
+the worker.
 
-Keep `BUYBACK_MODE=disabled` until the Railway transaction builder, independent
-quote validation, slippage cap, nonzero operating reserve, replay protection,
-and managed signer have been reviewed on mainnet. The requested five-minute,
-50% policy is represented by `BUYBACK_INTERVAL_SECONDS=300` and
-`BUYBACK_ALLOCATION_BPS=5000`; those variables do not execute a swap by
-themselves. Only confirmed signatures should be written to `buyback_epochs` and
-shown as completed buybacks on the public dashboard.
+Set `POA_REWARD_EPOCH_AMOUNT_RAW` explicitly. The worker intentionally has no
+default transfer amount. Confirm the public key derived from the secret matches
+`POA_REWARD_WALLET_PUBLIC_KEY`; the worker refuses to sign if it does not.
+
+The buyback worker uses Jupiter Swap V2 order/execute, keeps the configured SOL
+reserve untouched, and allocates 50% of the remaining wallet balance each
+five-minute epoch. It records the epoch before requesting a transaction, so a
+restart cannot execute the same time bucket twice. Set `JUPITER_API_KEY`, the
+buyback wallet pair, and a nonzero reserve before `BUYBACK_MODE=live`. Start
+with a deliberately small fee-wallet balance and confirm the first signature.
 
 ## 6. Value locations
 
@@ -116,18 +122,34 @@ shown as completed buybacks on the public dashboard.
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | Supabase → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Settings → API → publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service role key |
-| `DATABASE_URL` | Supabase → Connect → Session pooler |
-| `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_BEARER_TOKEN` | X Developer Console → App → Keys and tokens |
+| `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Console → Supabase X provider |
+| `X_BEARER_TOKEN` | X Developer Console → Railway sealed variable |
 | `SOLANA_RPC_URL` | Your private Solana RPC/indexer dashboard |
-| `RAILWAY_API_URL` | Railway service → Settings → Networking |
+| `NEXT_PUBLIC_RAILWAY_API_URL` | Railway service → Settings → Networking |
 | `NEXT_PUBLIC_APP_URL` / `WEB_APP_URL` | Final Vercel custom domain |
 
-## 7. Engineering order after setup
+## 7. Create the first administrator
 
-1. Supabase browser/server clients and X login.
-2. Solana message signing, one-X/one-wallet enforcement, and age checks.
-3. Real campaign creation, funding detection, and submissions.
-4. Railway X/Solana scanners and immutable metric snapshots.
-5. Transparent V1 scoring and live leaderboard.
-6. Admin review queue and manual multisig payout export.
-7. Security review, production test campaign, then public launch.
+After connecting the intended admin X account once, open Supabase →
+Authentication → Users, copy that user UUID, and run:
+
+```sql
+insert into public.admin_users (user_id)
+values ('REPLACE_WITH_AUTH_USER_UUID')
+on conflict (user_id) do nothing;
+```
+
+The same account can then open `/admin`, approve campaign applications, review
+each submission for botting, and finalize ended third-party campaigns.
+
+## 8. Launch verification
+
+1. Confirm Railway `/health` returns `status: ready` and `reward_mode: live`.
+2. Connect X at `/account` and verify a seven-day-old Solana wallet.
+3. Submit one qualifying `$POA` post and approve it from `/admin`.
+4. Confirm the next reward epoch writes one `reward_epochs` row and one
+   confirmed `reward_epoch_payouts` signature—never two rows for the same epoch.
+5. Run one funded SOL or SPL campaign through application, on-chain funding,
+   approval, submission review, and finalization with a deliberately small pool.
+6. Confirm one small buyback epoch through Jupiter before funding the fee wallet
+   with more than the next operating window.

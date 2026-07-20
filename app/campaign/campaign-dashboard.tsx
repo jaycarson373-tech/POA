@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { createClient, type Session } from "@supabase/supabase-js";
 
 type CampaignStatus = "draft" | "funding" | "upcoming" | "live" | "review" | "finalized" | "cancelled";
 
@@ -88,6 +89,28 @@ type BuybackEpochRecord = {
   status: string;
 };
 
+type AutoPayoutRecord = {
+  id: string;
+  submission_id: string;
+  rank: number;
+  amount_raw: string;
+  token_mint: string;
+  transaction_signature: string | null;
+  confirmed_at: string;
+};
+
+type IdentityData = {
+  user: { id: string };
+  wallet: { address: string; eligibility_status: string; eligibility_reason?: string | null } | null;
+  xAccount: { username: string; eligibility_status: string } | null;
+  positions: Array<{
+    campaign_id: string;
+    balance_raw: string;
+    continuous_hold_started_at: string | null;
+    sold_during_campaign: boolean;
+  }>;
+};
+
 type OptionalRows<T> = {
   available: boolean;
   rows: T[];
@@ -101,6 +124,7 @@ type DashboardData = {
   payouts: PayoutRecord[];
   market: OptionalRows<MarketSnapshotRecord>;
   buybacks: OptionalRows<BuybackEpochRecord>;
+  autoPayouts: OptionalRows<AutoPayoutRecord>;
 };
 
 type SyncState = "loading" | "ready" | "unconfigured" | "error";
@@ -113,10 +137,13 @@ const EMPTY_DATA: DashboardData = {
   payouts: [],
   market: { available: false, rows: [] },
   buybacks: { available: false, rows: [] },
+  autoPayouts: { available: false, rows: [] },
 };
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+const API_URL = (process.env.NEXT_PUBLIC_RAILWAY_API_URL || "").replace(/\/$/, "");
+const POA_TOKEN_DECIMALS = Number(process.env.NEXT_PUBLIC_POA_TOKEN_DECIMALS || "6");
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.trim()
   || "8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump";
@@ -193,6 +220,15 @@ function formatCountdown(endsAt: string | null, now: number) {
   return `${hours.toString().padStart(2, "0")}H ${minutes.toString().padStart(2, "0")}M`;
 }
 
+function formatHoldTime(startedAt: string | null, now: number) {
+  if (!startedAt || now === 0) return "—";
+  const seconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return days > 0 ? `${days}D ${hours}H` : `${hours}H ${minutes}M`;
+}
+
 function formatReward(campaign: CampaignRecord) {
   const symbol = campaign.reward_kind === "SOL" ? "SOL" : `$${campaign.ticker}`;
   return `${formatTokenAmount(campaign.reward_amount_raw, campaign.reward_decimals)} ${symbol}`;
@@ -225,6 +261,14 @@ export default function CampaignDashboard() {
   const [syncState, setSyncState] = useState<SyncState>("loading");
   const [now, setNow] = useState(0);
   const [notice, setNotice] = useState("");
+  const [session, setSession] = useState<Session | null>(null);
+  const [identity, setIdentity] = useState<IdentityData | null>(null);
+  const [postUrl, setPostUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const supabase = useMemo(
+    () => SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null,
+    [],
+  );
 
   const loadDashboard = useCallback(async () => {
     if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -253,7 +297,7 @@ export default function CampaignDashboard() {
       }
 
       const campaignFilter = `campaign_id=eq.${encodeURIComponent(selected.id)}`;
-      const [submissions, leaderboard, payouts, market, buybacks] = await Promise.all([
+      const [submissions, leaderboard, payouts, market, buybacks, autoPayouts] = await Promise.all([
         fetchRows<SubmissionRecord>(
           `submissions?select=id,user_id,x_post_url,status,submitted_at&${campaignFilter}&status=in.(tracking,flagged,approved,winner)&order=submitted_at.desc&limit=1000`,
         ),
@@ -269,6 +313,9 @@ export default function CampaignDashboard() {
         fetchOptionalRows<BuybackEpochRecord>(
           "buyback_epochs?select=id,input_lamports,output_amount_raw,output_decimals,transaction_signature,confirmed_at,status&status=eq.confirmed&order=confirmed_at.desc&limit=1000",
         ),
+        fetchOptionalRows<AutoPayoutRecord>(
+          `reward_epoch_payouts?select=id,submission_id,rank,amount_raw,token_mint,transaction_signature,confirmed_at&${campaignFilter}&status=eq.confirmed&order=confirmed_at.desc&limit=1000`,
+        ),
       ]);
       const submissionIds = submissions.map((submission) => submission.id).join(",");
       const metrics = submissionIds
@@ -277,13 +324,41 @@ export default function CampaignDashboard() {
           )
         : [];
 
-      setData({ campaigns: orderedCampaigns, submissions, leaderboard, metrics, payouts, market, buybacks });
+      setData({ campaigns: orderedCampaigns, submissions, leaderboard, metrics, payouts, market, buybacks, autoPayouts });
       setSyncState("ready");
     } catch {
       setData(EMPTY_DATA);
       setSyncState("error");
     }
   }, [requestedSlug]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data: authData }) => setSession(authData.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
+
+  const loadIdentity = useCallback(async () => {
+    if (!session || !API_URL) {
+      setIdentity(null);
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/v1/me`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const result = await response.json() as IdentityData & { error?: string };
+      if (!response.ok) throw new Error(result.error || "Identity request failed");
+      setIdentity(result);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load identity");
+      setIdentity(null);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void loadIdentity(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadIdentity]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void loadDashboard(), 0);
@@ -341,11 +416,15 @@ export default function CampaignDashboard() {
   }, [latestMetricBySubmission]);
 
   const poaAirdropped = useMemo(() => {
-    if (!campaign || campaign.reward_kind !== "SPL" || campaign.reward_mint !== campaign.token_mint) return null;
-    return data.payouts
+    if (!campaign) return null;
+    const finalized = data.payouts
       .filter((payout) => payout.asset_mint === campaign.token_mint)
       .reduce((sum, payout) => sum + BigInt(payout.amount_raw), BigInt(0));
-  }, [campaign, data.payouts]);
+    const automatic = data.autoPayouts.rows
+      .filter((payout) => payout.token_mint === campaign.token_mint)
+      .reduce((sum, payout) => sum + BigInt(payout.amount_raw), BigInt(0));
+    return finalized + automatic;
+  }, [campaign, data.autoPayouts.rows, data.payouts]);
 
   const confirmedBuybackSol = useMemo(() => {
     return data.buybacks.rows.reduce((sum, epoch) => sum + BigInt(epoch.input_lamports ?? "0"), BigInt(0));
@@ -368,6 +447,41 @@ export default function CampaignDashboard() {
     }
   };
 
+  const personal = useMemo(() => {
+    if (!campaign || !identity) return null;
+    const ownSubmissions = data.submissions.filter((submission) => submission.user_id === identity.user.id);
+    const ownIds = new Set(ownSubmissions.map((submission) => submission.id));
+    const leaderboard = data.leaderboard.find((row) => ownIds.has(row.submission_id));
+    const impressions = ownSubmissions.reduce(
+      (sum, submission) => sum + (latestMetricBySubmission.get(submission.id)?.impression_count || 0),
+      0,
+    );
+    const position = identity.positions.find((item) => item.campaign_id === campaign.id) || null;
+    return { leaderboard, impressions, position, submissionCount: ownSubmissions.length };
+  }, [campaign, data.leaderboard, data.submissions, identity, latestMetricBySubmission]);
+
+  const submitPost = async () => {
+    if (!session || !campaign || !API_URL) return;
+    setSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/v1/submissions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ campaign_id: campaign.id, x_post_url: postUrl }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Submission failed");
+      setPostUrl("");
+      setNotice("Post verified and entered into live tracking.");
+      await loadDashboard();
+      await loadIdentity();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Submission failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <main className="campaign-dashboard-page">
       <header className="protocol-header campaign-dashboard-header">
@@ -382,7 +496,7 @@ export default function CampaignDashboard() {
           <button className="header-contract" onClick={() => void copyContract()} aria-label="Copy POA contract address">
             <span>CA</span><b>{`${CONTRACT_ADDRESS.slice(0, 4)}…${CONTRACT_ADDRESS.slice(-4)}`}</b><i>COPY</i>
           </button>
-          <Link className="button-primary button-small" href="../#top">Connect identity</Link>
+          <Link className="button-primary button-small" href="../account/">{session ? "Identity connected" : "Connect identity"}</Link>
         </div>
       </header>
 
@@ -463,17 +577,28 @@ export default function CampaignDashboard() {
 
             <section className="dashboard-section your-stats-section">
               <div className="dashboard-section-head"><div><span>IDENTITY-SCOPED DATA</span><h2>Your campaign stats</h2></div><small>WALLET + X VERIFICATION REQUIRED</small></div>
-              <div className="identity-lock">
-                <div><i /> <strong>Identity not verified on this dashboard</strong><p>Connect X and sign with the wallet linked to your POA profile to unlock only your real campaign position.</p></div>
-                <Link className="button-secondary" href="../#top">Connect on protocol</Link>
+              {!identity ? (
+                <div className="identity-lock">
+                  <div><i /> <strong>Identity not verified on this dashboard</strong><p>Connect X and sign with the wallet linked to your POA profile to unlock only your real campaign position.</p></div>
+                  <Link className="button-secondary" href="../account/">Connect on protocol</Link>
+                </div>
+              ) : (
+                <div className="identity-lock"><div><i className="status-live" /> <strong>@{identity.xAccount?.username || "X pending"} / {identity.wallet?.address.slice(0, 5)}…{identity.wallet?.address.slice(-5)}</strong><p>{identity.wallet?.eligibility_status === "eligible" && identity.xAccount?.eligibility_status === "eligible" ? "Identity gates passed." : identity.wallet?.eligibility_reason || "One or more identity gates are still pending."}</p></div><Link className="button-secondary" href="../account/">Manage identity</Link></div>
+              )}
+              <div className="personal-stat-grid" aria-label="Your verified campaign statistics">
+                <article><span>YOUR HOLDINGS</span><strong>{personal?.position ? formatTokenAmount(personal.position.balance_raw, campaign.token_mint === CONTRACT_ADDRESS ? POA_TOKEN_DECIMALS : campaign.reward_decimals) : "—"}</strong><small>Latest indexed token balance</small></article>
+                <article><span>HOLD TIME</span><strong>{formatHoldTime(personal?.position?.continuous_hold_started_at || null, now)}</strong><small>{personal?.position?.sold_during_campaign ? "Balance decrease detected" : "Continuous verified hold"}</small></article>
+                <article><span>YOUR X IMPRESSIONS</span><strong>{personal ? formatCompact(personal.impressions) : "—"}</strong><small>Campaign submissions only</small></article>
+                <article><span>YOUR RANK</span><strong>{personal?.leaderboard ? `#${personal.leaderboard.rank}` : "—"}</strong><small>Current leaderboard position</small></article>
+                <article><span>YOUR ATTENTION SCORE</span><strong>{personal?.leaderboard ? formatCompact(Number(personal.leaderboard.attention_score)) : "—"}</strong><small>Verified performance + holder proof</small></article>
               </div>
-              <div className="personal-stat-grid" aria-label="Personal campaign statistics unavailable until identity verification">
-                <article><span>YOUR HOLDINGS</span><strong>—</strong><small>Live token balance</small></article>
-                <article><span>HOLD TIME</span><strong>—</strong><small>First verified hold → now</small></article>
-                <article><span>YOUR X IMPRESSIONS</span><strong>—</strong><small>Campaign submissions only</small></article>
-                <article><span>YOUR RANK</span><strong>—</strong><small>Current leaderboard position</small></article>
-                <article><span>YOUR ATTENTION SCORE</span><strong>—</strong><small>Verified performance + holder proof</small></article>
-              </div>
+              {campaign.status === "live" && (
+                <div className="campaign-submit-panel">
+                  <div><span className="section-label">SUBMIT CONTENT</span><p>Paste a post from your connected X account. POA verifies authorship and required campaign terms before tracking starts.</p></div>
+                  <input aria-label="X post URL" placeholder="https://x.com/you/status/..." value={postUrl} onChange={(event) => setPostUrl(event.target.value)} />
+                  <button className="button-primary" onClick={() => void submitPost()} disabled={!identity || !postUrl.trim() || submitting}>{submitting ? "Verifying…" : "Submit post"}</button>
+                </div>
+              )}
             </section>
 
             <section className="dashboard-section buyback-section">
@@ -535,6 +660,14 @@ export default function CampaignDashboard() {
                       tag: "REWARD",
                       text: `${formatTokenAmount(payout.amount_raw, campaign.reward_decimals)} ${payout.asset_mint ? `$${campaign.ticker}` : "SOL"} confirmed`,
                       meta: `rank ${payout.rank}`,
+                      href: payout.transaction_signature ? `https://solscan.io/tx/${payout.transaction_signature}` : "",
+                    })),
+                    ...data.autoPayouts.rows.map((payout) => ({
+                      id: `auto-payout-${payout.id}`,
+                      at: payout.confirmed_at,
+                      tag: "AUTO REWARD",
+                      text: `${formatTokenAmount(payout.amount_raw, POA_TOKEN_DECIMALS)} $POA confirmed`,
+                      meta: `epoch rank ${payout.rank}`,
                       href: payout.transaction_signature ? `https://solscan.io/tx/${payout.transaction_signature}` : "",
                     })),
                   ].sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime()).slice(0, 12).map((item) => (
