@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getWallets } from "@wallet-standard/app";
+import type { Wallet, WalletAccount } from "@wallet-standard/base";
+import {
+  StandardConnect,
+  StandardDisconnect,
+  StandardEvents,
+  type StandardConnectFeature,
+  type StandardDisconnectFeature,
+  type StandardEventsFeature,
+} from "@wallet-standard/features";
 
 type CampaignStatus = "draft" | "funding" | "upcoming" | "live" | "review" | "finalized" | "cancelled";
 
@@ -87,6 +97,25 @@ const CONTRACT_ADDRESS =
   "8MWh6MXsd64vgxrtjN2HygwJLR8g6fTGPTGJUXVBpump";
 const X_ACCOUNT_URL = "https://x.com/POA_solana";
 const PAGE_SIZE = 1000;
+
+type ConnectFeature = StandardConnectFeature[typeof StandardConnect];
+type DisconnectFeature = StandardDisconnectFeature[typeof StandardDisconnect];
+type EventsFeature = StandardEventsFeature[typeof StandardEvents];
+
+function isSolanaAccount(account: WalletAccount) {
+  return account.chains.some((chain) => chain.startsWith("solana:"));
+}
+
+function getSolanaWallets(wallets: readonly Wallet[]) {
+  const names = new Set<string>();
+  return wallets.filter((wallet) => {
+    if (names.has(wallet.name)) return false;
+    if (!(StandardConnect in wallet.features)) return false;
+    if (!wallet.chains.some((chain) => chain.startsWith("solana:"))) return false;
+    names.add(wallet.name);
+    return true;
+  });
+}
 
 async function fetchAllRows<T>(resource: string): Promise<T[]> {
   const rows: T[] = [];
@@ -193,6 +222,12 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
 }
 
 export default function Home() {
+  const reconnectAttempted = useRef(false);
+  const [detectedWallets, setDetectedWallets] = useState<readonly Wallet[]>([]);
+  const [activeWallet, setActiveWallet] = useState<Wallet | null>(null);
+  const [walletAddress, setWalletAddress] = useState("");
+  const [walletStatus, setWalletStatus] = useState<"idle" | "connecting" | "disconnecting">("idle");
+  const [showWalletPicker, setShowWalletPicker] = useState(false);
   const [data, setData] = useState<ProtocolData>(EMPTY_DATA);
   const [syncState, setSyncState] = useState<SyncState>("loading");
   const [filter, setFilter] = useState<"all" | "live" | "upcoming" | "closed">("all");
@@ -239,6 +274,64 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const registry = getWallets();
+    const refresh = () => setDetectedWallets(getSolanaWallets(registry.get()));
+    const timeout = window.setTimeout(refresh, 0);
+    const unregisterRegister = registry.on("register", refresh);
+    const unregisterUnregister = registry.on("unregister", refresh);
+
+    return () => {
+      window.clearTimeout(timeout);
+      unregisterRegister();
+      unregisterUnregister();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reconnectAttempted.current || detectedWallets.length === 0) return;
+    reconnectAttempted.current = true;
+
+    const timeout = window.setTimeout(() => {
+      const walletName = window.localStorage.getItem("poa.wallet");
+      const wallet = detectedWallets.find((candidate) => candidate.name === walletName);
+      if (!wallet) return;
+
+      const authorizedAccount = wallet.accounts.find(isSolanaAccount);
+      if (authorizedAccount) {
+        setActiveWallet(wallet);
+        setWalletAddress(authorizedAccount.address);
+        return;
+      }
+
+      const connectFeature = wallet.features[StandardConnect] as ConnectFeature;
+      void connectFeature.connect({ silent: true }).then(({ accounts }) => {
+        const account = accounts.find(isSolanaAccount);
+        if (!account) return;
+        setActiveWallet(wallet);
+        setWalletAddress(account.address);
+      }).catch(() => window.localStorage.removeItem("poa.wallet"));
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [detectedWallets]);
+
+  useEffect(() => {
+    if (!activeWallet || !(StandardEvents in activeWallet.features)) return;
+    const eventsFeature = activeWallet.features[StandardEvents] as EventsFeature;
+    return eventsFeature.on("change", ({ accounts }) => {
+      if (!accounts) return;
+      const account = accounts.find(isSolanaAccount);
+      if (account) {
+        setWalletAddress(account.address);
+      } else {
+        window.localStorage.removeItem("poa.wallet");
+        setWalletAddress("");
+        setActiveWallet(null);
+      }
+    });
+  }, [activeWallet]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => void loadProtocolData(), 0);
     return () => window.clearTimeout(timeout);
   }, [loadProtocolData]);
@@ -264,6 +357,7 @@ export default function Home() {
       if (event.key === "Escape") {
         setSelectedCampaign(null);
         setShowLaunch(false);
+        setShowWalletPicker(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -331,8 +425,63 @@ export default function Home() {
 
   const showValue = (value: number) => (syncState === "ready" ? formatCompact(value) : "—");
 
-  const requestConnection = (label: "X" | "Wallet") => {
-    setNotice(`${label} connection is not available on this deployment yet.`);
+  const requestXConnection = () => {
+    setNotice("X connection is not available on this deployment yet.");
+  };
+
+  const connectWallet = () => {
+    setShowWalletPicker(true);
+  };
+
+  const selectWallet = async (wallet: Wallet) => {
+    setWalletStatus("connecting");
+    setShowWalletPicker(false);
+    try {
+      const connectFeature = wallet.features[StandardConnect] as ConnectFeature;
+      const { accounts } = await connectFeature.connect();
+      const account = accounts.find(isSolanaAccount);
+      if (!account) throw new Error("No Solana account returned");
+      setActiveWallet(wallet);
+      setWalletAddress(account.address);
+      window.localStorage.setItem("poa.wallet", wallet.name);
+      setNotice(`${wallet.name} connected.`);
+    } catch {
+      setNotice("Wallet connection was cancelled or failed.");
+    } finally {
+      setWalletStatus("idle");
+    }
+  };
+
+  const disconnectWallet = async () => {
+    setWalletStatus("disconnecting");
+    try {
+      if (activeWallet && StandardDisconnect in activeWallet.features) {
+        const disconnectFeature = activeWallet.features[StandardDisconnect] as DisconnectFeature;
+        await disconnectFeature.disconnect();
+      }
+      window.localStorage.removeItem("poa.wallet");
+      setActiveWallet(null);
+      setWalletAddress("");
+      setNotice("Wallet disconnected.");
+    } catch {
+      setNotice("Could not disconnect the wallet.");
+    } finally {
+      setWalletStatus("idle");
+    }
+  };
+
+  const connected = Boolean(activeWallet && walletAddress);
+  const connecting = walletStatus === "connecting";
+  const disconnecting = walletStatus === "disconnecting";
+
+  const copyWallet = async () => {
+    if (!walletAddress) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setNotice("Wallet address copied.");
+    } catch {
+      setNotice("Could not copy the wallet address.");
+    }
   };
 
   const copyContract = async () => {
@@ -379,8 +528,24 @@ export default function Home() {
           >
             X <span>/ @POA_SOLANA</span>
           </a>
-          <button className="connect-x-button" onClick={() => requestConnection("X")}>Connect X</button>
-          <button className="button-primary button-small" onClick={() => requestConnection("Wallet")}>Connect Wallet</button>
+          <button className="connect-x-button" onClick={requestXConnection}>Connect X</button>
+          {connected && walletAddress ? (
+            <>
+              <button className="wallet-address" onClick={copyWallet} aria-label="Copy connected wallet address">
+                <span>WALLET</span>
+                <b>{`${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`}</b>
+                <i>{notice === "Wallet address copied." ? "COPIED" : "COPY"}</i>
+              </button>
+              <button className="wallet-disconnect" onClick={() => void disconnectWallet()} disabled={disconnecting}>
+                <span className="wallet-disconnect-wide">{disconnecting ? "Disconnecting" : "Disconnect"}</span>
+                <span className="wallet-disconnect-compact">OUT</span>
+              </button>
+            </>
+          ) : (
+            <button className="button-primary button-small" onClick={connectWallet} disabled={connecting}>
+              {connecting ? "Connecting…" : "Connect Wallet"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -575,6 +740,38 @@ export default function Home() {
         <small>© 2026 PROOF OF ATTENTION / SOLANA</small>
       </footer>
 
+      {showWalletPicker && (
+        <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Connect a Solana wallet">
+          <button className="modal-backdrop" onClick={() => setShowWalletPicker(false)} aria-label="Close wallet picker" />
+          <div className="protocol-modal wallet-picker">
+            <button className="modal-close" onClick={() => setShowWalletPicker(false)} aria-label="Close wallet picker">×</button>
+            <span className="section-label">SOLANA / WALLET STANDARD</span>
+            <h2>Connect wallet</h2>
+            <p className="modal-copy">Choose an installed Solana wallet. POA never receives your seed phrase or private key.</p>
+            {detectedWallets.length > 0 ? (
+              <div className="wallet-options">
+                {detectedWallets.map((wallet) => (
+                  <button key={wallet.name} onClick={() => void selectWallet(wallet)} disabled={connecting}>
+                    <span className="wallet-option-icon" style={{ backgroundImage: `url(${wallet.icon})` }} />
+                    <span><strong>{wallet.name}</strong><small>Detected wallet</small></span>
+                    <b>CONNECT</b>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="wallet-empty">
+                <strong>No Solana wallet detected</strong>
+                <p>Install a supported wallet, refresh this page, then connect.</p>
+                <div>
+                  <a href="https://phantom.com/download" target="_blank" rel="noreferrer">Get Phantom</a>
+                  <a href="https://www.solflare.com/download" target="_blank" rel="noreferrer">Get Solflare</a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {(selectedCampaign || showLaunch) && (
         <div className="modal-layer" role="dialog" aria-modal="true" aria-label={selectedCampaign ? selectedCampaign.name : "Launch campaign"}>
           <button className="modal-backdrop" onClick={() => { setSelectedCampaign(null); setShowLaunch(false); }} aria-label="Close dialog" />
@@ -590,7 +787,7 @@ export default function Home() {
                   <div><dt>Entries</dt><dd>{formatCompact(campaignActivity.entries.get(selectedCampaign.id) ?? 0)}</dd></div>
                   <div><dt>Verified attention</dt><dd>{formatCompact(campaignActivity.attention.get(selectedCampaign.id) ?? 0)}</dd></div>
                 </dl>
-                <button className="button-primary button-wide" onClick={() => requestConnection("X")}>Connect to Enter</button>
+                <button className="button-primary button-wide" onClick={requestXConnection}>Connect to Enter</button>
               </>
             ) : (
               <>
@@ -598,8 +795,12 @@ export default function Home() {
                 <h2>Launch a campaign</h2>
                 <p className="modal-copy">Connect an eligible X account and Solana wallet to continue. Campaigns must be funded before they can enter the marketplace.</p>
                 <div className="modal-actions">
-                  <button className="button-secondary" onClick={() => requestConnection("X")}>Connect X</button>
-                  <button className="button-primary" onClick={() => requestConnection("Wallet")}>Connect Wallet</button>
+                  <button className="button-secondary" onClick={requestXConnection}>Connect X</button>
+                  {connected && walletAddress ? (
+                    <button className="button-primary" onClick={() => void disconnectWallet()}>Disconnect Wallet</button>
+                  ) : (
+                    <button className="button-primary" onClick={connectWallet}>Connect Wallet</button>
+                  )}
                 </div>
               </>
             )}
