@@ -1,9 +1,10 @@
 # POA go-live setup
 
 This guide prepares Supabase, Vercel, Railway, X, and Solana for the production
-integration. The current frontend still uses demonstration data; completing
-these setup steps gives the application and workers the infrastructure they
-need for real accounts, campaigns, metrics, and payouts.
+integration. The frontend renders only records it can read from the production
+database and shows empty states otherwise. Completing these setup steps gives
+the application and workers the remaining infrastructure they need for real
+identity-scoped statistics and signed transactions.
 
 ## 1. Create the Supabase database
 
@@ -12,9 +13,11 @@ need for real accounts, campaigns, metrics, and payouts.
 3. Copy the entire contents of
    `supabase/migrations/20260720160000_initial_poa.sql` into the editor.
 4. Click **Run** once.
-5. Open **Table Editor** and confirm that `campaigns`, `submissions`,
+5. In a new query, run
+   `supabase/migrations/20260720213000_campaign_control_plane.sql` once.
+6. Open **Table Editor** and confirm that `campaigns`, `submissions`,
    `x_metric_snapshots`, `holder_snapshots`, `score_snapshots`, and `payouts`
-   exist.
+   exist, along with the campaign control-plane tables.
 
 The migration creates the complete V1 data model, indexes, automatic profile
 creation, row-level security, and a public `campaign_leaderboard` view.
@@ -85,7 +88,7 @@ the values through chat or commit them to GitHub.
 
 The worker process and API routes are the next implementation step. It will own
 X polling, wallet indexing, scoring, campaign transitions, review finalization,
-and payout preparation.
+market snapshots, payout preparation, and the buyback execution ledger.
 
 ## 5. Solana setup
 
@@ -97,6 +100,14 @@ Use a public treasury address for `TREASURY_PUBLIC_KEY`. Launch with
 `PAYOUT_MODE=manual` and approve payouts through a multisig or hardware wallet.
 Do not store a raw treasury private key in Vercel, Railway, Supabase, GitHub, or
 chat.
+
+Keep `BUYBACK_MODE=disabled` until the Railway transaction builder, independent
+quote validation, slippage cap, nonzero operating reserve, replay protection,
+and managed signer have been reviewed on mainnet. The requested five-minute,
+50% policy is represented by `BUYBACK_INTERVAL_SECONDS=300` and
+`BUYBACK_ALLOCATION_BPS=5000`; those variables do not execute a swap by
+themselves. Only confirmed signatures should be written to `buyback_epochs` and
+shown as completed buybacks on the public dashboard.
 
 ## 6. Value locations
 
