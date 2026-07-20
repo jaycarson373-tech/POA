@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,31 +12,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const origin = `${protocol}://${host}`;
+const siteUrl = (
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "https://proof-of-attention.sufficientlev.chatgpt.site"
+).replace(/\/$/, "");
 
-  return {
-    metadataBase: new URL(origin),
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: "POA — Proof of Attention",
+  description: "Onchain rewards for real attention. Compete in token-funded campaigns and earn for the reach you create.",
+  openGraph: {
     title: "POA — Proof of Attention",
-    description: "Onchain rewards for real attention. Compete in token-funded campaigns and earn for the reach you create.",
-    openGraph: {
-      title: "POA — Proof of Attention",
-      description: "Attention is the economy. Onchain rewards for real reach.",
-      type: "website",
-      url: origin,
-      images: [{ url: `${origin}/og.png`, width: 1734, height: 907, alt: "POA — Attention is the economy" }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "POA — Proof of Attention",
-      description: "Attention is the economy. Onchain rewards for real reach.",
-      images: [`${origin}/og.png`],
-    },
-  };
-}
+    description: "Attention is the economy. Onchain rewards for real reach.",
+    type: "website",
+    url: siteUrl,
+    images: [{ url: `${siteUrl}/og.png`, width: 1734, height: 907, alt: "POA — Attention is the economy" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "POA — Proof of Attention",
+    description: "Attention is the economy. Onchain rewards for real reach.",
+    images: [`${siteUrl}/og.png`],
+  },
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
