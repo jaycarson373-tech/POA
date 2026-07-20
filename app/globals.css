@@ -106,7 +106,8 @@ main {
 }
 
 .protocol-header nav a,
-.connection-actions button {
+.connection-actions button,
+.header-x-link {
   background: none;
   border: 0;
   color: #a0a0a8;
@@ -118,15 +119,55 @@ main {
 }
 
 .protocol-header nav a:hover,
-.connection-actions button:hover {
+.connection-actions button:hover,
+.header-x-link:hover {
   color: var(--white);
 }
 
 .connection-actions {
   align-items: center;
   display: flex;
-  gap: 14px;
+  gap: 12px;
   justify-self: end;
+}
+
+.connection-actions .header-contract {
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  display: inline-flex;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+.header-contract span,
+.header-contract i {
+  color: var(--blue-bright);
+  font-size: 8px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+
+.header-contract b {
+  color: #d7d7dd;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 560;
+}
+
+.header-contract i {
+  color: #73737c;
+}
+
+.header-x-link {
+  align-items: center;
+  display: inline-flex;
+  min-height: 32px;
+  text-decoration: none;
+}
+
+.header-x-link span {
+  color: #d7d7dd;
 }
 
 .connection-actions .button-primary {
@@ -291,39 +332,6 @@ main {
   display: flex;
   gap: 8px;
   margin-top: 28px;
-}
-
-.contract-address {
-  align-items: center;
-  background: transparent;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  cursor: pointer;
-  display: flex;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  gap: 12px;
-  margin-top: 14px;
-  max-width: 390px;
-  min-height: 38px;
-  padding: 0 12px;
-  width: 100%;
-}
-
-.contract-address span {
-  color: var(--muted-2);
-}
-
-.contract-address b {
-  color: #c5c5cb;
-  font-weight: 500;
-}
-
-.contract-address i {
-  color: var(--blue-soft);
-  font-size: 7px;
-  font-style: normal;
-  margin-left: auto;
 }
 
 .live-module {
@@ -1029,7 +1037,7 @@ footer small {
     padding: 0 18px;
   }
 
-  .connection-actions > button:first-child {
+  .connect-x-button {
     display: none;
   }
 
@@ -1111,11 +1119,33 @@ footer small {
 @media (max-width: 520px) {
   .protocol-header {
     height: 54px;
+    padding: 0 10px;
   }
 
   .brand-image--compact {
-    background-size: 118px auto;
-    width: 118px;
+    background-size: 88px auto;
+    width: 88px;
+  }
+
+  .connection-actions {
+    gap: 6px;
+  }
+
+  .connection-actions .header-contract {
+    gap: 5px;
+    padding: 0 7px;
+  }
+
+  .header-contract i,
+  .header-x-link span {
+    display: none;
+  }
+
+  .header-x-link {
+    border: 1px solid var(--line-strong);
+    justify-content: center;
+    min-width: 30px;
+    padding: 0;
   }
 
   .connection-actions .button-primary {
