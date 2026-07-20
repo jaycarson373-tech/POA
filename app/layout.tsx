@@ -26,13 +26,13 @@ export const metadata: Metadata = {
     description: "Attention is the economy. Onchain rewards for real reach.",
     type: "website",
     url: siteUrl,
-    images: [{ url: `${siteUrl}/og.png`, width: 1734, height: 907, alt: "POA — Attention is the economy" }],
+    images: [{ url: `${siteUrl}/poa-banner.jpg`, width: 1280, height: 426, alt: "POA — Proof of Attention" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "POA — Proof of Attention",
     description: "Attention is the economy. Onchain rewards for real reach.",
-    images: [`${siteUrl}/og.png`],
+    images: [`${siteUrl}/poa-banner.jpg`],
   },
 };
 

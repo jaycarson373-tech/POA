@@ -42,10 +42,19 @@ test("ships the complete launch surface without starter artifacts", async () => 
   assert.match(page, /Start attention tracking/);
   assert.match(page, /25 followers/);
   assert.match(page, /wallet older than 7 days/);
-  assert.match(layout, /\/og\.png/);
+  assert.match(page, /poa-logo\.jpg/);
+  assert.match(page, /poa-banner\.jpg/);
+  assert.match(layout, /\/poa-banner\.jpg/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /codex-preview|SkeletonPreview/);
+
+  await Promise.all([
+    access(new URL("../app/icon.png", import.meta.url)),
+    access(new URL("../app/apple-icon.png", import.meta.url)),
+    access(new URL("../public/poa-logo.jpg", import.meta.url)),
+    access(new URL("../public/poa-banner.jpg", import.meta.url)),
+  ]);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });

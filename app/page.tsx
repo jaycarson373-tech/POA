@@ -28,8 +28,8 @@ const campaigns: Campaign[] = [
     name: "BONK Attention Sprint",
     ticker: "BONK",
     glyph: "B",
-    color: "#ff6a3d",
-    soft: "#fff0e9",
+    color: "#f8fbff",
+    soft: "#164ee8",
     prize: "250M",
     prizeTicker: "$BONK",
     ends: "18:42:09",
@@ -48,8 +48,8 @@ const campaigns: Campaign[] = [
     name: "Jupiter Everywhere",
     ticker: "JUP",
     glyph: "J",
-    color: "#25c6a6",
-    soft: "#e9faf5",
+    color: "#8fc2ff",
+    soft: "#071d5c",
     prize: "75K",
     prizeTicker: "$JUP",
     ends: "31:06:44",
@@ -68,8 +68,8 @@ const campaigns: Campaign[] = [
     name: "SOL Summer Signal",
     ticker: "SOL",
     glyph: "S",
-    color: "#7759ef",
-    soft: "#f0edff",
+    color: "#ffffff",
+    soft: "#285fff",
     prize: "120",
     prizeTicker: "SOL",
     ends: "06:21:18",
@@ -88,8 +88,8 @@ const campaigns: Campaign[] = [
     name: "WIF Meme Marathon",
     ticker: "WIF",
     glyph: "W",
-    color: "#e6b340",
-    soft: "#fff7df",
+    color: "#a8ccff",
+    soft: "#0c286f",
     prize: "500K",
     prizeTicker: "$WIF",
     ends: "Starts tomorrow",
@@ -213,8 +213,8 @@ export default function Home() {
     <main>
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Proof of Attention home">
-          <span className="brand-mark">P<span>O</span>A</span>
-          <span className="brand-name">proof of attention</span>
+          <img className="brand-logo" src="poa-logo.jpg" alt="" />
+          <span className="brand-name"><b>POA</b> proof of attention</span>
         </a>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <a href="#campaigns">Campaigns</a>
@@ -236,6 +236,11 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      <section className="brand-banner" aria-label="POA — Proof of Attention">
+        <img src="poa-banner.jpg" alt="POA electric blue Proof of Attention banner" />
+        <span>PROOF OF ATTENTION · THE ATTENTION MARKET</span>
+      </section>
 
       <section className="hero" id="top">
         <div className="hero-copy">
@@ -438,7 +443,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <a className="brand brand--footer" href="#top"><span className="brand-mark">P<span>O</span>A</span><span className="brand-name">proof of attention</span></a>
+        <a className="brand brand--footer" href="#top"><img className="brand-logo brand-logo--footer" src="poa-logo.jpg" alt="" /><span className="brand-name"><b>POA</b> proof of attention</span></a>
         <p>Attention belongs to the people who create it.</p>
         <div><a href="#campaigns">Campaigns</a><a href="#how-it-works">Scoring</a><button onClick={() => setShowCreate(true)}>Launch</button><a href="#top">X / Twitter ↗</a></div>
         <small>© 2026 POA · BUILT ON SOLANA</small>
