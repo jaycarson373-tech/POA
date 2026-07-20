@@ -1619,9 +1619,12 @@ footer small {
   }
 
   .hero-primary > .brand-image {
-    background-size: 590px auto;
+    background-position: center 49%;
+    background-size: 100vw auto;
     height: 158px;
-    margin: -40px 0 -23px -64px;
+    margin: -40px 0 -23px -24px;
+    max-width: none;
+    width: calc(100% + 48px);
   }
 
   .hero-primary h2 {
