@@ -357,9 +357,11 @@ main {
 }
 
 .hero-primary > .brand-image {
-  background-size: min(820px, 116vw) auto;
+  background-size: min(820px, 100%) auto;
   height: 205px;
   margin: -52px 0 -31px -82px;
+  max-width: none;
+  width: calc(100% + 82px);
   filter: drop-shadow(0 16px 34px rgba(36, 92, 255, 0.08));
 }
 
@@ -1437,6 +1439,318 @@ footer small {
   width: 5px;
 }
 
+.utility-page {
+  min-height: 100vh;
+}
+
+.utility-brand {
+  color: var(--white);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-style: italic;
+  letter-spacing: 0.05em;
+}
+
+.utility-shell {
+  margin: 0 auto;
+  max-width: 1080px;
+  padding: 72px 32px 100px;
+}
+
+.utility-shell--wide {
+  max-width: 1260px;
+}
+
+.utility-shell > .section-head h1 {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: clamp(32px, 5vw, 58px);
+  font-style: italic;
+  letter-spacing: -0.06em;
+  margin: 11px 0 0;
+  text-transform: uppercase;
+}
+
+.utility-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.utility-card,
+.funding-panel,
+.admin-list > article {
+  background: rgba(7, 7, 9, 0.78);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 25px;
+}
+
+.utility-card h2,
+.funding-panel h2,
+.admin-card-head h2 {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 24px;
+  font-style: italic;
+  margin: 22px 0 0;
+  word-break: break-word;
+}
+
+.utility-card > p,
+.funding-panel > p,
+.admin-list article > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 13px 0 22px;
+}
+
+.utility-card dl,
+.funding-panel dl,
+.admin-list dl {
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 20px;
+}
+
+.utility-card dl > div,
+.funding-panel dl > div,
+.admin-list dl > div {
+  min-height: 66px;
+  padding: 12px;
+}
+
+.utility-card dl > div:nth-child(even),
+.funding-panel dl > div:nth-child(even),
+.admin-list dl > div:nth-child(even) {
+  border-left: 1px solid var(--line);
+}
+
+.utility-card dt,
+.funding-panel dt,
+.admin-list dt {
+  color: var(--muted-2);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.utility-card dd,
+.funding-panel dd,
+.admin-list dd {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.utility-wallets {
+  display: grid;
+  gap: 7px;
+}
+
+.utility-wallets button {
+  background: #0b0b0e;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  cursor: pointer;
+  min-height: 42px;
+}
+
+.identity-lock {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  margin: 20px 0;
+}
+
+.utility-alert {
+  background: rgba(36, 92, 255, 0.055);
+  border: 1px solid rgba(120, 153, 255, 0.22);
+  border-radius: var(--radius-sm);
+  color: #a8bbff;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  line-height: 1.5;
+  margin: 18px 0;
+  padding: 13px 15px;
+}
+
+.utility-alert a {
+  color: var(--white);
+  text-decoration: underline;
+}
+
+.utility-actions,
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.protocol-form {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 26px;
+}
+
+.protocol-form label,
+.funding-panel > label {
+  color: var(--muted);
+  display: grid;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  gap: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.campaign-submit-panel {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) auto;
+  margin-top: 14px;
+  padding: 17px;
+}
+
+.campaign-submit-panel p {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+
+.campaign-submit-panel input {
+  background: #08080a;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.protocol-form input,
+.protocol-form select,
+.protocol-form textarea,
+.funding-panel input {
+  background: #08080a;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  font: 11px var(--font-geist-sans), sans-serif;
+  min-height: 42px;
+  padding: 10px 12px;
+  text-transform: none;
+}
+
+.protocol-form textarea {
+  resize: vertical;
+}
+
+.protocol-form input:focus,
+.protocol-form select:focus,
+.protocol-form textarea:focus,
+.funding-panel input:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.form-wide {
+  grid-column: 1 / -1;
+}
+
+.form-submit {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding-top: 22px;
+}
+
+.form-submit p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 600px;
+}
+
+.funding-panel {
+  max-width: 800px;
+}
+
+.funding-panel > label {
+  margin: 22px 0 12px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-card-head {
+  align-items: start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.admin-card-head h2 small {
+  color: var(--blue-soft);
+  font-size: 12px;
+}
+
+.admin-card-head time {
+  color: var(--muted-2);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+}
+
+.admin-submission-heading {
+  margin-top: 70px;
+}
+
+.admin-post-link {
+  color: var(--blue-soft);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+}
+
+@media (max-width: 700px) {
+  .utility-grid,
+  .protocol-form {
+    grid-template-columns: 1fr;
+  }
+
+  .form-wide {
+    grid-column: 1;
+  }
+
+  .form-submit,
+  .admin-card-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .utility-shell {
+    padding: 48px 18px 80px;
+  }
+
+  .campaign-submit-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
 .campaign-dashboard-page {
   min-height: 100vh;
   overflow: visible;
@@ -2335,6 +2649,7 @@ footer small {
 
   .hero-primary > .brand-image {
     margin-left: -50px;
+    width: calc(100% + 50px);
   }
 
   .live-module {
