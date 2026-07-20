@@ -21,6 +21,7 @@
     "@wallet-standard/base": "^1.1.1",
     "@wallet-standard/features": "^1.1.1",
     "drizzle-orm": "0.45.2",
+    "framer-motion": "^12.42.2",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"

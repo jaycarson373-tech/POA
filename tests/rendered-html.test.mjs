@@ -51,8 +51,13 @@ test("ships the complete launch surface without starter artifacts", async () => 
   assert.match(page, /25 followers/);
   assert.match(page, /seven days old/);
   assert.match(page, /poa-wordmark\.jpg/);
+  assert.match(page, /framer-motion/);
+  assert.match(page, /attention-atmosphere/);
+  assert.match(page, /table-row--rank-/);
   assert.match(layout, /\/poa-wordmark\.jpg/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(css, /--shadow-panel/);
+  assert.match(packageJson, /framer-motion/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /codex-preview|SkeletonPreview/);
   assert.doesNotMatch(page, /BONK Attention Sprint|@solmason|250M|12\.8M|\$184K/);
